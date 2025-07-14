@@ -1,5 +1,3 @@
-#C:\Users\Louis.Penn\AppData\Local\Programs\Python\Python313
-
 testCommandLine = ["--json","local"]
 from tkinter import *
 from tkinter import ttk
