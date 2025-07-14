@@ -1,0 +1,6 @@
+{
+    "M6":{"Charges" : ["0","1","2","3"],"Trajectories": "High"},
+    "L16":{"Charges" : ["0","1","2","3","4","5","6"], "Trajectories": "High"},
+    "L119":{"Charges" : ["1","2","3","4","5","6","7"], "Trajectories": ["High","Low","Direct"]},
+    "Sholef":{"Charges" : ["1","2","3","4","5"], "Trajectories": ["High","Low","Direct"]}
+}
