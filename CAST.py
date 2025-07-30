@@ -1,4 +1,5 @@
-testCommandLine = ["--json","local"]
+testCommandLine = ["--json","server"]
+version = "v0.0.2"
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -14,6 +15,7 @@ import sys
 import pandas as pd
 import threading
 import queue
+import pyperclip
 from collections import Counter
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg,NavigationToolbar2Tk
@@ -311,8 +313,10 @@ fireMissionEffect = StringVar()
 """Selected effect on radio selection"""
 previousMissionEffect = "Destroy"
 """Previous Effect selected referenced when shifting from FPF to another FM"""
-fireMissionDispersion = StringVar()
-"""Selected dispersion for FM in metres"""
+fireMissionWidth = StringVar()
+"""Selected width for FM in metres"""
+fireMissionDepth = StringVar()
+"""Selected length for FM in metres"""
 fireMissionLength = StringVar()
 """Selected length of mission, either a number given in second or minutes with prefix Fig/fig"""
 fireMissionCondition = StringVar()
@@ -544,7 +548,7 @@ def ListTerrainFolders():
 
 terrainsFolders = []
 
-def StatusMessageLog(message: str,privateMessage = None):
+def StatusMessageLog(message = "",privateMessage = None):
     """
     Displays message in the status bar and log. Private message is given only to the user in the status bar, if message is "", it's not included in the log.
     """
@@ -563,6 +567,12 @@ def StatusMessageLog(message: str,privateMessage = None):
             messageLogText.insert("end",ReadMessageLog()) 
             messageLogText["state"] = "disabled"
             messageLogText.yview_moveto(1)
+
+def StatusMessageErrorDump(e: Exception, errorMessage = ""):
+    if errorMessage != "":
+        StatusMessageLog(message=errorMessage)
+    try: StatusMessageLog(message=f"Error details:\n\t{e}\n\t{type(e).__name__}\n\t{e.args}")
+    except: None
 
 def LoginWindow(startup=False):
     """Opens the login window"""
@@ -1425,6 +1435,7 @@ def UpdateSync(setting = None):
                 results['targets'] = Json_Load(source=3)##################SORT OUT TARGETS
             if setting == 4:
                 results['fire mission'] = Json_Load(source=4)
+                print(Json_Load(source=4))
         except Exception as e:
             results['error'] = f"Failed to load JSON: {str(e)}"
         # Put results in queue instead of calling root.after()
@@ -1548,10 +1559,6 @@ def Sort_FireMissions(items):
         return segments  # The sorting key is now a list of (True/False, value)
     return sorted(items.keys(), key=sort_key)
 
-def EditFireMissions():
-    if fireMissionSelectionLabelframe["text"] != "Fire Mission Selection":
-        FireMissionEdit()
-
 def RequestEditFireMissionsFromSafety(*args):
     for target, (edit, calculate) in listCheckBox_vars["LR"].items(): edit.set(False)
     for target, (edit, calculate) in seriesDict["LR"].items(): edit.set(False)
@@ -1653,28 +1660,119 @@ def RequestEditFireMissions():
             fireMissionSelectionEffectAreaDenialRadio.grid()
             fireMissionSelectionEffectSmokeRadio.grid()
             fireMissionSelectionEffectIllumRadio.grid()
+        fireMissionSelectionUpdateMission.grid_remove()
     else:
         fireMissionSelectionLabelframe["text"] = editList + "Edit missions"
-        #if editCount == 1:
-
-        FireMissionEdit()
+        fireMissionSelectionUpdateMission.grid()
+        if editCount == 1:
+            FireMissionEdit()
 
 def FireMissionEdit(*args):
+    def PasteSettings(prefix,target,targets):
+        fireMissionEffect.set(targets[prefix][target]["Effect"])
+        fireMissionWidth.set(str(int(float(targets[prefix][target]["Width"])*2)))
+        fireMissionDepth.set(str(int(float(targets[prefix][target]["Depth"])*2)))
+        fireMissionLength.set(targets[prefix][target]["Length"])
+        fireMissionCondition.set(targets[prefix][target]["Condition"])
+        fireMissionHour.set(targets[prefix][target]["Time"]["Hour"])
+        fireMissionMinute.set(targets[prefix][target]["Time"]["Minute"])
+        fireMissionSecond.set(targets[prefix][target]["Time"]["Second"])
+    targets = Json_Load(source=3)
     for target, (edit, calculate) in listCheckBox_vars["LR"].items():
         if edit.get() == True:
-            old = targetList["LR"][target]
-            new = old[0],old[1],old[2],fireMissionEffect.get(),fireMissionDispersion.get(),fireMissionLength.get(),fireMissionCondition.get(),fireMissionHour.get(),fireMissionMinute.get(),fireMissionSecond.get()
-            targetList["LR"][target] = new
+            PasteSettings("LR",target,targets)
+
     for target, (edit, calculate) in listCheckBox_vars["XY"].items():
         if edit.get() == True:
-            old = targetList["XY"][target]
-            new = old[0],old[1],old[2],fireMissionEffect.get(),fireMissionDispersion.get(),fireMissionLength.get(),fireMissionCondition.get(),fireMissionHour.get(),fireMissionMinute.get(),fireMissionSecond.get()
-            targetList["XY"][target] = new
+            PasteSettings("XY",target,targets)
+
     for target, (edit, calculate) in listCheckBox_vars["FPF"].items():
         if edit.get() == True:
-            old = targetList["FPF"][target]
-            new = old[0],old[1],old[2],fireMissionEffect.get(),fireMissionDispersion.get(),fireMissionLength.get(),fireMissionCondition.get(),fireMissionHour.get(),fireMissionMinute.get(),fireMissionSecond.get()
-            targetList["FPF"][target] = new
+            PasteSettings("FPF",target,targets)
+
+def FireMissionEffectUpdate(*args):
+    editedFireMission = ""
+    def SaveSettings(prefix,target,targets,fireMissions):
+        mutator = "None"
+        orientation = "None"
+        if fireMissionWidth.get() != "0" and fireMissionWidth.get() != "" and fireMissionDepth.get() != "0" and fireMissionDepth.get() != "":
+            try:
+                int(fireMissionWidth.get())
+                int(fireMissionDepth.get())
+                mutator = "Box"
+            except:
+                try: int(fireMissionWidth.get())
+                except: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
+                try: int(fireMissionDepth.get())
+                except: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+        elif fireMissionDepth.get() != "0" and fireMissionDepth.get() != "":
+            try:
+                int(fireMissionDepth.get())
+                mutator = "Line"
+                orientation = "Vertical"
+            except: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+        elif fireMissionWidth.get() != "0" and fireMissionWidth.get() != "":
+            try:
+                int(fireMissionWidth.get())
+                mutator = "Line"
+                orientation = "Horizontal"
+            except: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
+        changeFiremission = (int(float(targets[prefix][target]["Width"])*2) == int(fireMissionWidth.get()) and
+                             int(float(targets[prefix][target]["Depth"])*2) == int(fireMissionDepth.get()))
+        if changeFiremission: 
+           for idfp,missions in list(fireMissions.items()):
+                if f"{prefix}-{target}" in missions.keys():
+                    fireMissions[idfp][f"{prefix}-{target}"]["Effect"] = fireMissionEffect.get()
+                    fireMissions[idfp][f"{prefix}-{target}"]["Length"] = fireMissionLength.get()
+                    fireMissions[idfp][f"{prefix}-{target}"]["Condition"] = fireMissionCondition.get()
+                    if fireMissionCondition.get() == "Time":
+                        fireMissions[idfp][f"{prefix}-{target}"]["Time"] = {
+                            "Hour": int(fireMissionHour.get()),
+                            "Minute": int(fireMissionMinute.get()),
+                            "Second": int(fireMissionSecond.get())
+                            }
+                    elif fireMissionCondition.get() != "Time":
+                        fireMissions[idfp][f"{prefix}-{target}"].pop("Time",None)
+        else:
+            StatusMessageLog(message=f"{prefix}-{target} requires recalculation to change dispersion")
+        targets[prefix][target]["Effect"] = fireMissionEffect.get()
+        targets[prefix][target]["Width"] = int(fireMissionWidth.get())/2
+        targets[prefix][target]["Depth"] = int(fireMissionDepth.get())/2
+        targets[prefix][target]["Length"] = fireMissionLength.get()
+        targets[prefix][target]["Condition"] = fireMissionCondition.get()
+        targets[prefix][target]["Mutator"] = mutator
+        targets[prefix][target]["Orientation"] = orientation
+        targets[prefix][target]["Time"]["Hour"] = int(fireMissionHour.get())
+        targets[prefix][target]["Time"]["Minute"] = int(fireMissionMinute.get())
+        targets[prefix][target]["Time"]["Second"] = int(fireMissionSecond.get())
+        return targets,fireMissions
+        
+    targets = Json_Load(source=3)
+    fireMissions = Json_Load(source=4)
+    for target, (edit, calculate) in listCheckBox_vars["LR"].items():
+        if edit.get() == True:
+            targets,fireMissions = SaveSettings("LR",target,targets,fireMissions)
+            editedFireMission += (str("LR")+"-"+str(target)+", ")
+
+    for target, (edit, calculate) in listCheckBox_vars["XY"].items():
+        if edit.get() == True:
+            targets,fireMissions = SaveSettings("XY",target,targets,fireMissions)
+            editedFireMission += (str("XY")+"-"+str(target)+", ")
+
+    for target, (edit, calculate) in listCheckBox_vars["FPF"].items():
+        if edit.get() == True:
+            targets,fireMissions = SaveSettings("FPF",target,targets,fireMissions)
+            editedFireMission += (str("FPF")+"-"+str(target)+", ")
+    try:
+        Json_Save(source=3,newEntry=targets)
+        StatusMessageLog(message=f"Updated Targets {editedFireMission[:-2]}")
+    except Exception as e:
+        StatusMessageErrorDump(e, errorMessage="Failed to update targets")
+    try:
+        Json_Save(source=4,newEntry=fireMissions)
+        StatusMessageLog(message=f"Updated fire missions {editedFireMission[:-2]}")
+    except Exception as e:
+        StatusMessageErrorDump(e, errorMessage="Failed to update fire missions")
 
 def SelectBelow(checkbox,frame,Checkbox_vars):
     focusedWidget = frame.focus_get()
@@ -1688,15 +1786,15 @@ def SelectBelow(checkbox,frame,Checkbox_vars):
         if item[:1] == selection and root.tk.getboolean(root.tk.globalgetvar(focusedWidget.cget("variable"))) == True:
             if checkbox == 1:
                 var1.set(True)
-                RequestEditFireMissions()
             elif checkbox == 2:
                 var2.set(True)
         if item[:1] == selection and root.tk.getboolean(root.tk.globalgetvar(focusedWidget.cget("variable"))) == False:
             if checkbox == 1:
                 var1.set(False)
-                RequestEditFireMissions()
             elif checkbox == 2:
                 var2.set(False)
+    if checkbox == 1:
+        RequestEditFireMissions()
 
 def on_mouse_enter(event):
     widget: Widget = event.widget
@@ -1731,9 +1829,22 @@ def create_checkboxes(frame: ttk.Frame, Checkbox_vars,seriesDict,FPFSelection = 
         text = widget.cget("text") if widget.winfo_exists() else None
         targetContextMenu.delete(0,END)
         prefix = frame.master.master.cget("text")
+        targetContextMenu.add_command(label="Copy Grid",command=lambda w=widget,t=text,p=prefix: CopyGrid(w,t,p))
         targetContextMenu.add_command(label="Clock Splash Offset",command=lambda w=widget,t=text,p=prefix: ClockSplashOffset(w,t,p))
         targetContextMenu.add_command(label="Delete Fire mission",command=lambda: ClearFireMission(mission=prefix,name=text,calculated=True))
         targetContextMenu.post(event.x_root,event.y_root)
+    def CopyGrid(widget: Widget,text,prefix):
+        try:
+            if widget.winfo_exists():
+                grid = Json_Load(source=3)[prefix][widget.cget("text")]["GridX"]+Json_Load(source=3)[prefix][widget.cget("text")]["GridY"]
+                pyperclip.copy(grid)
+                text = widget.cget("text")
+            else:
+                grid = Json_Load(source=3)[prefix][text]["GridX"]+Json_Load(source=3)[prefix][text]["GridY"]
+                pyperclip.copy(grid)
+            StatusMessageLog(privateMessage=f"Copied {prefix}-{text} grid {grid} to clipboard")
+        except Exception as e:
+            StatusMessageErrorDump(e)
     def ClockSplashOffset(widget: Widget,text,prefix):
         global clockHandOffset
         try:
@@ -1901,15 +2012,41 @@ def TargetAdd():
             except KeyError: newTarget = {prefix : {}}
             try: targetList[prefix]
             except: targetList[prefix] = {}
+            mutator = "None"
+            orientation = "None"
+            if fireMissionWidth.get() != "0" and fireMissionWidth.get() != "" and fireMissionDepth.get() != "0" and fireMissionDepth.get() != "":
+                try:
+                    int(fireMissionWidth.get())
+                    int(fireMissionDepth.get())
+                    mutator = "Box"
+                except:
+                    try: int(fireMissionWidth.get())
+                    except: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
+                    try: int(fireMissionDepth.get())
+                    except: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+            elif fireMissionDepth.get() != "0" and fireMissionDepth.get() != "":
+                try:
+                    int(fireMissionDepth.get())
+                    mutator = "Line"
+                    orientation = "Vertical"
+                except: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+            elif fireMissionWidth.get() != "0" and fireMissionWidth.get() != "":
+                try:
+                    int(fireMissionWidth.get())
+                    mutator = "Line"
+                    orientation = "Horizontal"
+                except: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
             targetList[prefix][new_item]= {
                 "GridX" : targetPosX.get(),
                 "GridY" : targetPosY.get(),
                 "Height" : float(targetHeight.get()),
                 "Effect" : fireMissionEffect.get(),
-                "Dispersion" : int(fireMissionDispersion.get()),
+                "Width" : int(fireMissionWidth.get())/2,
+                "Depth" : int(fireMissionDepth.get())/2,
                 "Length" : fireMissionLength.get(),
                 "Condition" : fireMissionCondition.get(),
-                "Mutator" : "None",
+                "Mutator" : mutator,
+                "Orientation" : orientation,
                 "Time" : {"Hour" : int(fireMissionHour.get()),
                         "Minute" : int(fireMissionMinute.get()),
                         "Second" : int(fireMissionSecond.get())}
@@ -1937,6 +2074,7 @@ def TargetAdd():
 
 def FireMissionLoadInfo(newfireMissions):
     global FireMissions
+    print(newfireMissions,FireMissions)
     if newfireMissions != FireMissions:
         FireMissions = newfireMissions
         FireMissionDisplayTabUpdate(FireMissions)
@@ -2003,55 +2141,96 @@ def Calculate():
     states = Json_Load(0)
     IDFPDict = Json_Load(1)
     def solutions (details,idfp):
-        if details["Dispersion"] == 0 and details["Mutator"] == "None":
-            if IDFPDict[idfp]["ForceCharge"] == 1:
-                solution = AF.Solution(baseDir=exeDir,
-                                       artyX=IDFPDict[idfp]["GridX"],
-                                       artyY=IDFPDict[idfp]["GridY"],
-                                       system=states["system"],
-                                       fireAngle=IDFPDict[idfp]["Trajectory"],
-                                       tgtX=details["GridX"],tgtY=details["GridY"],
-                                       artyHeight=IDFPDict[idfp]["Height"],
-                                       targetHeight=details["Height"],
-                                       maxHeight=maxTerrainHeight,
-                                       windDirection=states["windDirection"],
-                                       windMagnitude=states["windMagnitude"],
-                                       humidity=states["airHumidity"],
-                                       temperature=states["airTemperature"],
-                                       pressure=states["airPressure"],
-                                       charge=int(IDFPDict[idfp]["Charge"])
-                                    )
-                #############TERRAIN AVOIDANCE +1 Charge
-                solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
-                del solution["LowPositions"]
-                return solution
-            else:
-                StatusMessageLog(message=str(calculations))
-                solution = AF.Solution(baseDir=exeDir,
-                                       artyX=IDFPDict[idfp]["GridX"],
-                                       artyY=IDFPDict[idfp]["GridY"],
-                                       system=states["system"],
-                                       fireAngle=IDFPDict[idfp]["Trajectory"],
-                                       tgtX=details["GridX"],tgtY=details["GridY"],
-                                       artyHeight=IDFPDict[idfp]["Height"],
-                                       targetHeight=details["Height"],
-                                       maxHeight=maxTerrainHeight,
-                                       windDirection=states["windDirection"],
-                                       windMagnitude=states["windMagnitude"],
-                                       humidity=states["airHumidity"],
-                                       temperature=states["airTemperature"],
-                                       pressure=states["airPressure"],
-                                       charge=-1
-                        )
-                #################TERRAIN AVOIDANCE +1 Charge
-                
-                solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
-                del solution["LowPositions"]
-                return solution
+        charge = -1 if IDFPDict[idfp]["ForceCharge"] == 0 else int(IDFPDict[idfp]["Charge"])
+        if details["Mutator"] == "None":
+            solution = AF.Solution(baseDir=exeDir,
+                                    artyX=IDFPDict[idfp]["GridX"],
+                                    artyY=IDFPDict[idfp]["GridY"],
+                                    system=states["system"],
+                                    fireAngle=IDFPDict[idfp]["Trajectory"],
+                                    tgtX=details["GridX"],tgtY=details["GridY"],
+                                    artyHeight=IDFPDict[idfp]["Height"],
+                                    targetHeight=details["Height"],
+                                    maxHeight=maxTerrainHeight,
+                                    windDirection=states["windDirection"],
+                                    windMagnitude=states["windMagnitude"],
+                                    humidity=states["airHumidity"],
+                                    temperature=states["airTemperature"],
+                                    pressure=states["airPressure"],
+                                    charge=charge
+                                )
+            #############TERRAIN AVOIDANCE +1 Charge
+            solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
+            if details["Condition"] == "Time":
+                solution["Time"] = {
+                    "Hour": details["Time"]["Hour"],
+                    "Minute": details["Time"]["Minute"],
+                    "Second": details["Time"]["Second"]
+                }
+            del solution["LowPositions"]
+            return solution
         elif details["Mutator"] == "Line":
-            None
+            deviation = details["Depth"] if details["Orientation"] == "Vertical" else details["Width"]
+            solution = AF.Line(baseDir=exeDir,
+                    orientation=details["Orientation"],
+                    deviation=deviation,
+                    artyX=IDFPDict[idfp]["GridX"],
+                    artyY=IDFPDict[idfp]["GridY"],
+                    system=states["system"],
+                    fireAngle=IDFPDict[idfp]["Trajectory"],
+                    tgtX=details["GridX"],tgtY=details["GridY"],
+                    artyHeight=IDFPDict[idfp]["Height"],
+                    targetHeight=details["Height"],
+                    maxHeight=maxTerrainHeight,
+                    windDirection=states["windDirection"],
+                    windMagnitude=states["windMagnitude"],
+                    humidity=states["airHumidity"],
+                    temperature=states["airTemperature"],
+                    pressure=states["airPressure"],
+                    charge=charge,
+                    progressbar=statusProgressBar
+            )
+            solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Orientation"],solution["Deviation"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],details["Orientation"],deviation,IDFPDict[idfp]["Trajectory"]
+            if details["Condition"] == "Time":
+                solution["Time"] = {
+                    "Hour": details["Time"]["Hour"],
+                    "Minute": details["Time"]["Minute"],
+                    "Second": details["Time"]["Second"]
+                }
+            del solution["LowPositions"]
+            return solution
+        
+        elif details["Mutator"] == "Box":
+            solution = AF.Box(baseDir=exeDir,
+                    deviationLength=details["Depth"],
+                    deviationWidth=details["Width"],
+                    artyX=IDFPDict[idfp]["GridX"],
+                    artyY=IDFPDict[idfp]["GridY"],
+                    system=states["system"],
+                    fireAngle=IDFPDict[idfp]["Trajectory"],
+                    tgtX=details["GridX"],tgtY=details["GridY"],
+                    artyHeight=IDFPDict[idfp]["Height"],
+                    targetHeight=details["Height"],
+                    maxHeight=maxTerrainHeight,
+                    windDirection=states["windDirection"],
+                    windMagnitude=states["windMagnitude"],
+                    humidity=states["airHumidity"],
+                    temperature=states["airTemperature"],
+                    pressure=states["airPressure"],
+                    charge=charge,
+                    progressbar=statusProgressBar
+            )
+            solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
+            if details["Condition"] == "Time":
+                solution["Time"] = {
+                    "Hour": details["Time"]["Hour"],
+                    "Minute": details["Time"]["Minute"],
+                    "Second": details["Time"]["Second"]
+                }
+            del solution["LowPositions"]
+            return solution
         else:
-            details
+            None
             #################BOXBOXBOX
     def CalculationIteration(mission):
         for target, (edit,calculate) in listCheckBox_vars[mission].items():
@@ -2059,17 +2238,17 @@ def Calculate():
                 details = targets[mission][target]
                 idfpSelection = Json_Load(0,localOverride=True)["IDFPSelection"]
                 for idfp in [list(IDFPDict.keys())[i] for i in list(idfpSelection)]:
-                    #try :
-                    StatusMessageLog(message=f"Beginning calculation of {mission}-{target}")
-                    solution = solutions(details,idfp)
-                    #except:
-                    StatusMessageLog(message=f"Failed to calculate {mission}-{target}")
-                    #else:
-                    FireMissionUpdate(solution,idfp,f"{mission}-{target}")
-                    StatusMessageLog(message="Calculated {}-{}, Range: {}m, Bearing: {:03d}°".format(mission,target,int(solution["Range"]),int(solution["Bearing"]*180/np.pi)))
-                    statusMessageLabel.update()
-                    statusProgressBar["value"] = statusProgressBar["value"] + 1
-                    statusProgressBar.update()
+                    try :
+                        StatusMessageLog(message=f"Beginning calculation of {mission}-{target}")
+                        solution = solutions(details,idfp)
+                    except:
+                        StatusMessageLog(message=f"Failed to calculate {mission}-{target}")
+                    else:
+                        FireMissionUpdate(solution,idfp,f"{mission}-{target}")
+                        StatusMessageLog(message="Calculated {}-{}, Range: {}m, Bearing: {:03d}°".format(mission,target,int(solution["Range"]),int(solution["Bearing"]*180/np.pi)))
+                        statusMessageLabel.update()
+                        statusProgressBar["value"] = statusProgressBar["value"] + 1
+                        statusProgressBar.update()
     CalculationIteration("FPF")
     CalculationIteration("LR")
     CalculationIteration("XY")
@@ -2093,24 +2272,30 @@ def StandardFireMissionOutput(FireMissions: dict,idfp: str,textWidget: Text):
         textWidget.insert(END,"\t-----------------------------------------------------------------------------------------------------------------------------------\n",("line","border"))
         textWidget.insert(END,"\tRange\t| {:04d}".format(int(details["Range"])),("default","border"))
         try:
-            if float(details["RangeDeviation"]) > 1.0:
-                textWidget.insert(END," ± {} m\n".format(details["RangeDeviation"]),("default","border"))
+            if float(details["DeviationLength"]) > 1.0:
+                textWidget.insert(END," ± {} m\n".format(int(np.round(details["DeviationLength"]))),("default","border"))
             else:
                 textWidget.insert(END," m\n",("default","border"))
         except: textWidget.insert(END," m\n",("default","border"))
-        try:vertex = np.ceil(list(details["Vertex"])[2]/5)*5
+        try:
+            if float(details["DeviationWidth"]) > 1.0:
+                textWidget.insert(END,"\tWidth\t| ± {} m\n".format(int(np.round(details["DeviationWidth"]))),("default","border"))
+        except: None
+        try:vertex = int(np.ceil(list(details["Vertex"])[2]/5)*5)
         except:vertex = details["Vertex"]
-        textWidget.insert(END,"\tTrajectory\t| {} \n\tTOF\t| {:0.1f} s\n\tVertex\t| FL {:05.1f} \n\tCharge\t| ".format(details["Trajectory"],float(details["TOF"]),vertex),("default","border"))
+        textWidget.insert(END,"\tTrajectory\t| {} \n\tTOF\t| {:0.1f} s\n\tVertex\t| FL {:03d} \n\tCharge\t| ".format(details["Trajectory"],float(details["TOF"]),vertex),("default","border"))
         textWidget.insert(END,"{}\n".format(details["Charge"]),("bold","border"))
         textWidget.insert(END,"\t-----------------------------------------------------------------------------------------------------------------------------------\n",("line","border"))
         textWidget.insert(END,"\tAzimuth\t| ",("default","border"))
+        
         textWidget.insert(END," {:06.1f} ".format(details["Azimuth"]*3200/np.pi),("bold","highlight"))
         try:
-            if float(details["AzimuthDeviation"]) > 1.0:
-                textWidget.insert(END," ± {} mils\n\t⇐      ".format(details["AzimuthDeviation"]),("default","border"))
-                textWidget.insert(END,"{:06.1f}".format(details["AzimuthLeft"]*3200/np.pi),("bold","border"))
+            if float(details["DeviationWidth"]) > 1.0:
+                azimuthDeviation = details["Azimuth"]-details["Left"] if (details["Azimuth"]-details["Left"]) > 0 else (details["Azimuth"]-details["Left"])+2*np.pi
+                textWidget.insert(END," ± {} mils\n\t⇐      ".format(np.round(azimuthDeviation*3200/np.pi)),("default","border"))
+                textWidget.insert(END,"{:04d}".format(int(np.round(details["Left"]*3200/np.pi))),("bold","border"))
                 textWidget.insert(END,"\t|",("default","border"))
-                textWidget.insert(END,"\t{:06.1f}".format(details["AzimuthRight"]*3200/np.pi),("bold","border"))
+                textWidget.insert(END,"\t{:04d}".format(int(np.round(details["Right"]*3200/np.pi))),("bold","border"))
                 textWidget.insert(END,"      ⇒ \n",("default","border"))
             else: textWidget.insert(END," mils\n",("default","border"))
         except: textWidget.insert(END," mils\n",("default","border"))
@@ -2118,27 +2303,14 @@ def StandardFireMissionOutput(FireMissions: dict,idfp: str,textWidget: Text):
         textWidget.insert(END,"\tElevation\t| ",("default","border"))
         textWidget.insert(END," {:06.1f} ".format(details["Elevation"]),("bold","highlight"))
         try:
-            if float(details["ElevationDeviation"]) > 1.0:
-                textWidget.insert(END," ± {} mils\n".format(details["ElevationDeviation"]),("default","border"))
-                try: 
-                    if details["Trajectory"] == "High":
-                        textWidget.insert(END,"\t⇓       ",("default","border"))
-                        textWidget.insert(END,"{:06.1f}".format(details["ElevationHigh"]),("bold","border"))
-                        textWidget.insert(END,"\t| ",("default","border"))
-                        textWidget.insert(END,"\t{:06.1f}".format(details["ElevationLow"]),("bold","border"))
-                        textWidget.insert(END,"       ⇑\n",("default","border"))
-                    else:
-                        textWidget.insert(END,"\t⇓       ",("default","border"))
-                        textWidget.insert(END,"{:06.1f}".format(details["ElevationLow"]),("bold","border"))
-                        textWidget.insert(END,"\t|  ",("default","border"))
-                        textWidget.insert(END,"\t{:06.1f}".format(details["ElevationHigh"]),("bold","border"))
-                        textWidget.insert(END,"       ⇑\n",("default","border"))
-                except:
-                        textWidget.insert(END,"\t⇓       ",("default","border"))
-                        textWidget.insert(END,"{:06.1f}".format(details["ElevationLow"]),("bold","border"))
-                        textWidget.insert(END,"\t|  ",("default","border"))
-                        textWidget.insert(END,"\t{:06.1f}".format(details["ElevationHigh"]),("bold","border"))
-                        textWidget.insert(END,"       ⇑\n",("default","border"))
+            if float(details["DeviationLength"]) > 1.0:
+                elevationDeviation = (abs(details["Elevation"]-details["Near"])+abs(details["Elevation"]-details["Far"]))/2
+                textWidget.insert(END," ± {} mils\n".format(np.round(elevationDeviation)),("default","border"))
+                textWidget.insert(END,"\t⇓       ",("default","border"))
+                textWidget.insert(END,"{:04d}".format(int(np.round(details["Near"]))),("bold","border"))
+                textWidget.insert(END,"\t| ",("default","border"))
+                textWidget.insert(END,"\t{:04d}".format(int(np.round(details["Far"]))),("bold","border"))
+                textWidget.insert(END,"       ⇑\n",("default","border"))
             else: textWidget.insert(END," mils\n",("default","border"))
         except: textWidget.insert(END," mils\n",("default","border"))
     #FPF
@@ -2249,14 +2421,12 @@ def IDFPTextFrameConfiguration(idfpNotebookFrame: ttk.Frame):
     idfpNotebookText.tag_configure("divide",font=("Microsoft Tai Le",4),background="grey",bgstipple="@tempstipple.xbm")
     yScroll = Scrollbar(idfpNotebookFrame,orient="vertical",command=idfpNotebookText.yview)
     xScroll = Scrollbar(idfpNotebookFrame,orient="horizontal",command=idfpNotebookText.xview)
-    StatusMessageLog(message="4")
     idfpNotebookText["yscrollcommand"] = yScroll.set
     idfpNotebookText["xscrollcommand"] = xScroll.set
     idfpNotebookText.grid(row=0,column=0,sticky="nesw")
     yScroll.grid(row=0,column=1,sticky="ns")
     xScroll.grid(row=1,column=0,sticky="ew")
     idfpNotebookText["state"] = "disabled"
-    StatusMessageLog(message="Test 1")
 
 def UpdateFireMissionNotebook(FireMissions):
     global idfpNotebookFrameDict
@@ -2270,6 +2440,7 @@ def UpdateFireMissionNotebook(FireMissions):
             idfpNotebookFrame = ttk.Frame(idfpNotebook,width="500")
             idfpNotebookFrameDict[idfp] = idfpNotebookFrame
             idfpNotebookFrame.grid(row=0,column=0,sticky="NESW")
+            
             idfpNotebookFrame.grid_rowconfigure(0,weight=1)
             idfpNotebookFrame.grid_rowconfigure(1,minsize=20)
             idfpNotebookFrame.grid_columnconfigure(0,weight=1)
@@ -2303,14 +2474,14 @@ def FireMissionDisplayTabUpdate(FireMissions):
         tabs.append(idfpNotebook.tab(tabId,option="text"))
         if idfpNotebook.tab(tabId,option="text") not in FireMissions.keys():
             idfpNotebook.forget(tabId)
-            del idfpNotebookFrameDict[idfpNotebook.tab(tabId,option="text")]
+            try: del idfpNotebookFrameDict[idfpNotebook.tab(tabId,option="text")]
+            except: StatusMessageLog(message="Failed to remove Fire Mission")
     for idfp in FireMissions.keys():
         if idfp not in tabs:
             idfpNotebookFrame = ttk.Frame(idfpNotebook,width="500")
             idfpNotebookFrameDict[idfp] = idfpNotebookFrame
             IDFPTextFrameConfiguration(idfpNotebookFrame)
             idfpNotebook.add(idfpNotebookFrame,text=idfp,sticky="NESW",padding="10")
-            StatusMessageLog(message="Test 2")
 
 
 
@@ -2609,28 +2780,34 @@ pane22.grid_rowconfigure(0,weight=1)
 pane22.grid_columnconfigure(0,weight=1)
 fireMissionSelectionLabelframe = ttk.Labelframe(pane22,text="Fire Mission Selection",height=200,width=500,padding=5,relief="groove")
 fireMissionSelectionLabelframe.grid_columnconfigure((0,1,2,3),minsize=70,weight=1)
-fireMissionSelectionLabelframe.grid_rowconfigure((0,1,2),weight=1)
+fireMissionSelectionLabelframe.grid_rowconfigure((0,1,2,3),weight=1)
 fireMissionSelectionEffectLabelframe = ttk.Labelframe(fireMissionSelectionLabelframe,text="Effect")
 fireMissionSelectionEffectLabelframe.grid_columnconfigure((0,2),weight=5)
 fireMissionSelectionEffectLabelframe.grid_columnconfigure(1,weight=1)
 fireMissionSelectionEffectLabelframe.grid_rowconfigure((0,1,2,3,4,5,6,7),weight=1)
-fireMissionSelectionEffectDestroyRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Destroy",command=EditFireMissions,variable=fireMissionEffect,value="Destroy")
-fireMissionSelectionEffectNeutraliseRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Neutralise",command=EditFireMissions,variable=fireMissionEffect,value="Neutralise")
-fireMissionSelectionEffectCheckRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Check",command=EditFireMissions,variable=fireMissionEffect,value="Checkround")
-fireMissionSelectionEffectSaturationRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Saturation",command=EditFireMissions,variable=fireMissionEffect,value="Saturate")
-fireMissionSelectionEffectFPFRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="FPF",command=EditFireMissions,variable=fireMissionEffect,value="FPF")
-fireMissionSelectionEffectAreaDenialRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Area Denial",command=EditFireMissions,variable=fireMissionEffect,value="Area_Denial")
-fireMissionSelectionEffectSmokeRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Smoke",command=EditFireMissions,variable=fireMissionEffect,value="Smoke")
-fireMissionSelectionEffectIllumRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Illum",command=EditFireMissions,variable=fireMissionEffect,value="Illum")
+fireMissionSelectionEffectDestroyRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Destroy",variable=fireMissionEffect,value="Destroy")
+fireMissionSelectionEffectNeutraliseRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Neutralise",variable=fireMissionEffect,value="Neutralise")
+fireMissionSelectionEffectCheckRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Check",variable=fireMissionEffect,value="Checkround")
+fireMissionSelectionEffectSaturationRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Saturation",variable=fireMissionEffect,value="Saturate")
+fireMissionSelectionEffectFPFRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="FPF",variable=fireMissionEffect,value="FPF")
+fireMissionSelectionEffectAreaDenialRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Area Denial",variable=fireMissionEffect,value="Area_Denial")
+fireMissionSelectionEffectSmokeRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Smoke",variable=fireMissionEffect,value="Smoke")
+fireMissionSelectionEffectIllumRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Illum",variable=fireMissionEffect,value="Illum")
 fireMissionEffect.set("0")
 fireMissionEffect.trace_add(mode="write",callback=FireMissionEffectChange)
+fireMissionSelectionUpdateMission = ttk.Button(fireMissionSelectionLabelframe,text="Update",command=lambda: FireMissionEffectUpdate())
 fireMissionSelectionDispersionLabelframe = ttk.Labelframe(fireMissionSelectionLabelframe,text="Dispersion",padding=4)
 fireMissionSelectionDispersionLabelframe.grid_columnconfigure(0,weight=1,minsize=30)
 fireMissionSelectionDispersionLabelframe.grid_columnconfigure(1)
 fireMissionSelectionDispersionLabelframe.grid_rowconfigure(0,weight=1)
-fireMissionSelectionDispersionCombobox = ttk.Combobox(fireMissionSelectionDispersionLabelframe,textvariable=fireMissionDispersion,justify="right",width=4,values=("0","10","20","40","50","100","150","200","250"))
-fireMissionDispersion.set("0")
-fireMissionSelectionDispersionUnitLabel = ttk.Label(fireMissionSelectionDispersionLabelframe,text="m",padding=4,justify="left")
+fireMissionSelectionWidthLabel = ttk.Label(fireMissionSelectionDispersionLabelframe,text="Wid",padding=4,justify="right")
+fireMissionSelectionDepthLabel = ttk.Label(fireMissionSelectionDispersionLabelframe,text="Dep",padding=4,justify="right")
+fireMissionSelectionWidthCombobox = ttk.Combobox(fireMissionSelectionDispersionLabelframe,textvariable=fireMissionWidth,justify="right",width=4,values=("0","10","20","40","50","100","150","200","250"))
+fireMissionWidth.set("0")
+fireMissionSelectionDepthCombobox = ttk.Combobox(fireMissionSelectionDispersionLabelframe,textvariable=fireMissionDepth,justify="right",width=4,values=("0","10","20","40","50","100","150","200","250"))
+fireMissionDepth.set("0")
+fireMissionSelectionWidthUnitLabel = ttk.Label(fireMissionSelectionDispersionLabelframe,text="m",padding=4,justify="left")
+fireMissionSelectionDepthUnitLabel = ttk.Label(fireMissionSelectionDispersionLabelframe,text="m",padding=4,justify="left")
 fireMissionSelectionLengthLabelframe = ttk.Labelframe(fireMissionSelectionLabelframe,text="Length",padding=4)
 fireMissionSelectionLengthLabelframe.grid_columnconfigure(0,weight=1,minsize=30)
 fireMissionSelectionLengthLabelframe.grid_columnconfigure(1)
@@ -2793,6 +2970,7 @@ DrawClockFace()
 UpdateClock()
 
 def TerrainFolderCheck():
+    terrain_menu.insert_radiobutton
     for terrainFolder in terrainsFolders[0]: 
         terrain_menu.add_radiobutton(label=terrainFolder,variable=terrain,value=terrainFolder)
     try:
@@ -2989,12 +3167,22 @@ reset_menu.add_checkbutton(label="Safety Toggle",onvalue=1,offvalue=0,variable=r
 resetSafety.trace_add(mode = "write", callback=ClearSafety)
 resetSafety.set(1)
 
+style_menu = Menu(menubar,tearoff=False)
+style_menu.add_command(label="Clam",command=lambda: ttk.Style().theme_use('clam'))
+style_menu.add_command(label="Winnative",command=lambda: ttk.Style().theme_use('winnative'))
+style_menu.add_command(label="Vista",command=lambda: ttk.Style().theme_use('vista'))
+style_menu.add_command(label="Alt",command=lambda: ttk.Style().theme_use('alt'))
+style_menu.add_command(label="Default",command=lambda: ttk.Style().theme_use('default'))
+style_menu.add_command(label="Classic",command=lambda: ttk.Style().theme_use('classic'))
+
 help_menu = Menu(menubar,tearoff=False)
+help_menu.add_command(label=version)
 
 menubar.add_cascade(label="System",menu=system_menu)
 menubar.add_cascade(label="Terrain",menu=terrain_menu)
 menubar.add_cascade(label="Settings",menu=settings_menu)
 menubar.add_cascade(label="Clear",menu=reset_menu)
+menubar.add_cascade(label="Style",menu=style_menu)
 menubar.add_cascade(label="Help",menu=help_menu,underline=0)
 
 systemTrace = system.trace_add(mode = "write", callback=lambda *args: SystemChange(newSystem=system.get(),set=True))
@@ -3109,9 +3297,15 @@ fireMissionSelectionEffectSaturationRadio.grid(column="1",row="3",sticky="EW",pa
 fireMissionSelectionEffectAreaDenialRadio.grid(column="1",row="5",sticky="EW",padx=4)
 fireMissionSelectionEffectSmokeRadio.grid(column="1",row="6",sticky="EW",padx=4)
 fireMissionSelectionEffectIllumRadio.grid(column="1",row="7",sticky="EW",padx=4)
+fireMissionSelectionUpdateMission.grid(column="0",row="2",sticky="NESW",padx=4)
+fireMissionSelectionUpdateMission.grid_remove()
 fireMissionSelectionDispersionLabelframe.grid(column="1",row="0",sticky="NEW",padx=4)
-fireMissionSelectionDispersionCombobox.grid(column="0",row="0",sticky="NEW")
-fireMissionSelectionDispersionUnitLabel.grid(column="1",row="0",sticky="NW")
+fireMissionSelectionWidthLabel.grid(column="0",row="0",sticky="NEW")
+fireMissionSelectionDepthLabel.grid(column="0",row="1",sticky="NEW")
+fireMissionSelectionWidthCombobox.grid(column="1",row="0",sticky="NEW")
+fireMissionSelectionDepthCombobox.grid(column="1",row="1",sticky="NEW")
+fireMissionSelectionWidthUnitLabel.grid(column="2",row="0",sticky="NW")
+fireMissionSelectionDepthUnitLabel.grid(column="2",row="1",sticky="NW")
 fireMissionSelectionLengthLabelframe.grid(column="2",row="0",sticky="NEW",padx=4)
 fireMissionSelectionLengthCombobox.grid(column="0",row="0",sticky="NEW")
 fireMissionSelectionLengthUnitLabel.grid(column="1",row="0",sticky="NW")
@@ -3123,7 +3317,7 @@ fireMissionSelectionTimeColonLabel1.grid(column="1",row="0",sticky="NEW")
 fireMissionSelectionTimeMinutesEntry.grid(column="2",row="0",sticky="NEW")
 fireMissionSelectionTimeColonLabel2.grid(column="3",row="0",sticky="NEW")
 fireMissionSelectionTimeSecondsEntry.grid(column="4",row="0",sticky="NEW")
-fireMissionSelectionPairedEffectLabelframe.grid(column="0",row="2",columnspan=4,sticky="NEW",padx=4)
+fireMissionSelectionPairedEffectLabelframe.grid(column="0",row="3",columnspan=4,sticky="NEW",padx=4)
 fireMissionSelectionPairedEffectLabelframe.grid_remove()
 fireMissionSelectionPairedEffectLineRadio.grid(column="1",row="0",sticky="NEW")
 fireMissionSelectionPairedEffectELineRadio.grid(column="1",row="1",sticky="NEW")
@@ -3233,7 +3427,7 @@ def StartUp(login = False,terrains = True):
         TerrainFolderCheck()
         IDFPListInitialise()
         if terrains == True:
-            TerrainChange()
+            terrain.set(Json_Load(source=0,localOverride=True)["terrain"])
         UpdateSync()
         CheckUpdateQueue()
     if login ==True or jsonType == 0:

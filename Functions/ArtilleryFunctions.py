@@ -291,9 +291,9 @@ def Charge(system,FireAngle,distance) -> int:
         elif distance > 450: return 1
         else: return 0
     if system == "M6":
-        if distance > 1400: return 3
-        elif distance > 1050: return 2
-        elif distance > 700: return 1
+        if distance > 1250: return 3
+        elif distance > 925: return 2
+        elif distance > 625: return 1
         else: return 0
 
 def GridPosition(artyX: str,artyY: str,adjacent: float,opposite:float,bearing: float, xFlip = False, yFlip = False,oppositeType = "triangle"):
@@ -618,7 +618,7 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
     #Wind direction is the direction the wind is going to
     seaRho = SeaLevelAirDensity(AirDensity(humidity,temperature,pressure),artyHeight)
     airDensity = AirDensity(humidity=humidity,temp=temperature,pressure=pressure)
-    print(Trajectory(SystemInfo(system="L119",info="charge").get(charge=3),337,airDensity,0,0,artyHeight,targetHeight,"Low",SystemInfo(system="L119",info="mass").get(),SystemInfo(system="L119",info="dragCoef").get(),SystemInfo(system="L119",info="crossArea").get())[6][-1])
+    print("INIT", Trajectory(SystemInfo(system="L119",info="charge").get(charge=3),337,airDensity,0,0,artyHeight,targetHeight,"Low",SystemInfo(system="L119",info="mass").get(),SystemInfo(system="L119",info="dragCoef").get(),SystemInfo(system="L119",info="crossArea").get())[6][-1])
     print(baseDir,artyX,artyY,system,fireAngle,tgtX,tgtY,artyHeight,targetHeight,maxHeight,windDirection,windMagnitude,humidity,temperature,pressure,charge,xFlip,yFlip)
     
     distance = Pythag(artyX,artyY,tgtX,tgtY)
@@ -648,7 +648,9 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
         deltaDistance = distance-trajectory.T[-1][6]
         iterations +=1
     if abs(deltaDistance) >= accuracy and iterations == 20:
-        
+        def manualIteration(oldRange,oldElev):
+            if trajectory == "High":
+                None
         return RecursionError
         #FALLBACK METHOD NEEDED
     collisionAvoidance = []
@@ -672,7 +674,7 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
         "Elevation" : predictElev,
         "Bearing" : bearing,
         "Azimuth" : Azimuth(),
-        "Vertex" : Vertex()[2],
+        "Vertex" : Vertex(),
         "Charge" : charge,
         "TOF" : trajectory.T[-1][9],
         "System" : system,
@@ -688,25 +690,30 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
     return(solutionDict)
 def Line(baseDir,orientation: float,deviation: float,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tgtY:str,artyHeight=float(0),targetHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False, progressbar = None):
     if orientation == "Vertical":
-        farPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)+deviation,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip)
-        farSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system="Sholef",fireAngle=fireAngle,tgtX=farPosition[0],tgtY=farPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip)
-        try:progressbar["value"] = progressbar["value"] + 1
+        farPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)+deviation,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="triangle")
+        farSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=farPosition[0],tgtY=farPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip)
+        try:
+            progressbar["value"] = progressbar["value"] + 1
+            progressbar.update()
         except: None
         solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
-        try:progressbar["value"] = progressbar["value"] + 1
+        try:
+            progressbar["value"] = progressbar["value"] + 1
+            progressbar.update()
         except: None
-        nearPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)-deviation,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip)
-        nearSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system="Sholef",fireAngle=fireAngle,tgtX=nearPosition[0],tgtY=nearPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
-        solution["Orientation"] = orientation
+        nearPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)-deviation,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="triangle")
+        nearSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=nearPosition[0],tgtY=nearPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
+        print(farSolution["Elevation"])
         solution["Far"] = farSolution["Elevation"]
         solution["Near"] = nearSolution["Elevation"]
         solution["TOF"] = nearSolution["TOF"]
-        solution["Vertex"] = (solution["Vertex"][0],solution["Vertex"][1],nearSolution["Vertex"][2])
+        solution["Vertex"] = [solution["Vertex"][0],solution["Vertex"][1],nearSolution["Vertex"][2]]
         solution["DeviationLength"] = deviation
         return solution
     elif orientation == "Horizontal":
+        print("TEST2")
         solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip)
-        solution["Orientation"] = orientation
+        print("test", solution)
         solution["Left"] = solution["Azimuth"]-deviation/Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)
         solution["Right"] = solution["Azimuth"]+deviation/Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)
         if solution["Left"] < 0 :
@@ -718,15 +725,19 @@ def Line(baseDir,orientation: float,deviation: float,artyX: str,artyY: str,syste
     else:
         return AttributeError
 def Box(baseDir,deviationLength: float,deviationWidth: float,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tgtY:str,artyHeight=float(0),targetHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,progressbar = None):
-    farPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)+deviationLength,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="arc")
-    farSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system="Sholef",fireAngle=fireAngle,tgtX=farPosition[0],tgtY=farPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip)
-    try:progressbar["value"] = progressbar["value"] + 1
+    farPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)+deviationLength,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="triangle")
+    farSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=farPosition[0],tgtY=farPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip)
+    try:
+        progressbar["value"] = progressbar["value"] + 1
+        progressbar.update()
     except: None
     solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
-    try:progressbar["value"] = progressbar["value"] + 1
+    try:
+        progressbar["value"] = progressbar["value"] + 1
+        progressbar.update()
     except: None
-    nearPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)-deviationLength,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="arc")
-    nearSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system="Sholef",fireAngle=fireAngle,tgtX=nearPosition[0],tgtY=nearPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
+    nearPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)-deviationLength,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="triangle")
+    nearSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=nearPosition[0],tgtY=nearPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
     solution["Far"] = farSolution["Elevation"]
     solution["Near"] = nearSolution["Elevation"]
     solution["Left"] = solution["Azimuth"]-deviationWidth/Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)
@@ -738,7 +749,7 @@ def Box(baseDir,deviationLength: float,deviationWidth: float,artyX: str,artyY: s
     solution["DeviationLength"] = deviationLength
     solution["DeviationWidth"] = deviationWidth
     solution["TOF"] = nearSolution["TOF"]
-    solution["Vertex"] = (solution["Vertex"][0],solution["Vertex"][1],nearSolution["Vertex"][2])
+    solution["Vertex"] = [solution["Vertex"][0],solution["Vertex"][1],nearSolution["Vertex"][2]]
     return solution
 
 def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:list,tgtY:list,tgtHeight,tgtName,explicit = False,series = False, seriesOrientation = None,spread = 20,artyHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,progressbar = None):
@@ -761,7 +772,9 @@ def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:
                     grid2 = GridPosition(artyX,artyY,averagePointDistance,0,bearing=Bearing(artyX,artyY,tgtX[i+1],tgtY[i+1],xFlip,yFlip))
                     averageHeight = (tgtHeight[i]+tgtHeight[i+1])/2
                     grid1Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid1[0],grid1[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,humidity,temperature,pressure,charge,xFlip,yFlip)
-                    try:progressbar["value"] = progressbar["value"] + 1
+                    try:
+                        progressbar["value"] = progressbar["value"] + 1
+                        progressbar.update()
                     except: None
                     grid2Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid2[0],grid2[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,humidity,temperature,pressure,grid1Solution["Charge"],xFlip,yFlip)
                     lineSolution[tgtName[i]+","+tgtName[i+1]] = {
@@ -789,7 +802,9 @@ def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:
                     print(grid1,grid2)
                     averageHeight = (tgtHeight[i]+tgtHeight[i+1])/2
                     grid1Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid1[0],grid1[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,humidity,temperature,pressure,charge,xFlip,yFlip)
-                    try:progressbar["value"] = progressbar["value"] + 1
+                    try:
+                        progressbar["value"] = progressbar["value"] + 1
+                        progressbar.update()
                     except: None
                     grid2Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid2[0],grid2[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,humidity,temperature,pressure,grid1Solution["Charge"],xFlip,yFlip)
                     lineSolution[tgtName[i]+","+tgtName[i+1]] = {
