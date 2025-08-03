@@ -2,7 +2,7 @@
 name: Bug Report
 about: Report a bug with an existing part of CAST
 title: "<Area> - <Bug>"
-labels: discussion, bug
+labels: progress-discussion, category-bug
 assignees: 'Penn-L'
 ---
 
