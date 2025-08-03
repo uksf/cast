@@ -7,7 +7,7 @@ assignees: 'Penn-L'
 ---
 
 # Description
-<!-- A clear and concise explanation of what is not functioning correctly and the circumstances of it happening -->
+<!-- A clear and concise explanation of what is to be enhanced -->
 
 # Enhancement area
 <!--what area of CAST should the enhancement affect. Which UI element, which fire mission type, which output, etc. -->
