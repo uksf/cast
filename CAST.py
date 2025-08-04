@@ -1,5 +1,5 @@
 testCommandLine = ["--json","server"]
-version = "v0.0.2"
+version = "v0.0.3"
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -99,11 +99,21 @@ def Json_Load(source : int,localOverride = False) -> dict | str:
             elif source == 6:
                 with open(exeDir/"Functions"/"ArtilleryConfigs.json",mode="r") as file:
                     return json.load(file)
-        except:
-            if source !=5:
+        except Exception as e:
+            if source == 0: source = "Common parameters"
+            elif source == 1: source = "IDFP position data"
+            elif source == 2: source = "Friendly position data"
+            elif source == 3: source = "Target position data"
+            elif source == 4: source = "Fire mission data"
+            elif source == 5:
+                StatusMessageErrorDump(e, errorMessage="Failed load Message log, returning nothing")
                 return {}
-            else:
-                return ""
+            else: source = "IDFP position data"
+            StatusMessageErrorDump(e, errorMessage=f"Failed load {source}, returning nothing")
+            return ""
+                
+                
+                
     elif jsonType ==1:
         global authToken
         try:
@@ -997,20 +1007,25 @@ def SystemChange(*args,newSystem = None,set = False):
             except: StatusMessageLog(message="",privateMessage="Could not save system to JSON")
             else:
                 StatusMessageLog(f"Changed artillery system from {oldSystem} to {system.get()}")
+        try: idfpSystemOutput["text"] = newSystem
+        except: idfpSystemOutput["text"] = "Error"
         StatusMessageLog("System Change: If pre-existing IDFP selections are present, check selection charges, trajectories and old calculations")
     # For Saving from JSON
     else:
         try:
             oldSystem = system.get()
             system.set(newSystem)
+            idfpSystemOutput["text"] = newSystem
             StatusMessageLog(f"Artillery system has changed from {oldSystem} to {newSystem}") if oldSystem !="" else StatusMessageLog(f"Artillery system set to {newSystem}")
             StatusMessageLog(message="",privateMessage="System Change: If pre-existing IDFP selections are present, check selection charges, trajectories and old calculations")
         except: StatusMessageLog(message="Could not load system from JSON")
     systemTrace = system.trace_add(mode = "write", callback=lambda *args: SystemChange(newSystem=system.get(),set=True))
     settings_to_process["system"]["traceName"] = systemTrace 
     systems = Json_Load(6)
-    idfpEditChargeComboBox["values"] = systems[system.get()]["Charges"]
-    idfpEditTrajComboBox["values"] = systems[system.get()]["Trajectories"]
+    try:
+        idfpEditChargeComboBox["values"] = systems[system.get()]["Charges"]
+        idfpEditTrajComboBox["values"] = systems[system.get()]["Trajectories"]
+    except: None
 
 def IDFPListInitialise():
     """Updates the list of IDFPs in the list box, it also selects the previous selections made both from last session and just before the listbox is udpated"""
@@ -1435,7 +1450,6 @@ def UpdateSync(setting = None):
                 results['targets'] = Json_Load(source=3)##################SORT OUT TARGETS
             if setting == 4:
                 results['fire mission'] = Json_Load(source=4)
-                print(Json_Load(source=4))
         except Exception as e:
             results['error'] = f"Failed to load JSON: {str(e)}"
         # Put results in queue instead of calling root.after()
@@ -2074,14 +2088,11 @@ def TargetAdd():
 
 def FireMissionLoadInfo(newfireMissions):
     global FireMissions
-    print(newfireMissions,FireMissions)
     if newfireMissions != FireMissions:
         FireMissions = newfireMissions
         FireMissionDisplayTabUpdate(FireMissions)
         FireMissionDisplayUpdate(FireMissions)
         
-
-
 
 def update_scrollregion(frame: ttk.Frame,canvas: Canvas):
     frame.update_idletasks()
@@ -2618,8 +2629,16 @@ idfpHeightEntry = ttk.Entry(idfpHeightFrame, justify="center",textvariable=idfpH
 idfpHeightUnitLabel = ttk.Label(idfpHeightFrame,text="m")
 idfpButtonFrame = ttk.Frame(idfpCreationFrame,padding=5)
 idfpButtonFrame.grid_columnconfigure(0,weight=1)
-idfpButtonFrame.grid_rowconfigure(0,weight=5)
-idfpButtonFrame.grid_rowconfigure(1,weight=1)
+#idfpButtonFrame.grid_rowconfigure(0,weight=5)
+idfpButtonFrame.grid_rowconfigure((0,1,2),weight=1)
+idfpSystemFrame = ttk.Frame(idfpButtonFrame,padding=4,relief="solid")
+idfpSystemFrame.grid_columnconfigure(0,minsize=9,weight=1)
+idfpSystemFrame.grid_columnconfigure(1,minsize=4)
+idfpSystemFrame.grid_columnconfigure(2,minsize=9,weight=5)
+idfpSystemFrame.grid_rowconfigure(0,weight=1)
+idfpSystemLabel = ttk.Label(idfpSystemFrame,text="System")
+idfpSystemSep = ttk.Separator(idfpSystemFrame,orient="vertical")
+idfpSystemOutput = ttk.Label(idfpSystemFrame,text="None",justify="right")
 idfpAddButton = ttk.Button(idfpButtonFrame,text="Add/Update",command=IDFPPositionAddUpdate)
 idfpRemoveButton = ttk.Button(idfpButtonFrame,text="Remove",command=lambda: IDFPPositionRemove(name=idfpName.get()))
 idfpSeparator = ttk.Separator(idfpCreationFrame,orient="horizontal")
@@ -2667,14 +2686,14 @@ temperatureEntry.bind("<Return>",TemperatureEntryValidate)
 temperatureEntry.bind("<Tab>",TemperatureEntryValidate)
 temperatureEntry.bind("<Escape>",lambda *args: CancelSettingChange(StrVar=airTemperature,label=temperatureLabel,stringvar="airTemperature"))
 temperatureUnits = ttk.Label(airLabelFrame,text="°C")
-humidityLabel = ttk.Label(airLabelFrame, text="airHumidity",padding=4)
+humidityLabel = ttk.Label(airLabelFrame, text="Air Humidity",padding=4)
 airHumidityTrace = airHumidity.trace_add(mode="write",callback=lambda *args: LabelBold(humidityLabel,"Bold","airHumidity"))
-humidityEntry = ttk.Entry(airLabelFrame,width="4",textvariable=airHumidity,justify="right")
+humidityEntry = ttk.Entry(airLabelFrame,width="5",textvariable=airHumidity,justify="right")
 humidityEntry.bind("<Return>",HumidityEntryValidate)
 humidityEntry.bind("<Tab>",HumidityEntryValidate)
 humidityEntry.bind("<Escape>",lambda *args: CancelSettingChange(StrVar=airHumidity,label=humidityLabel,stringvar="airHumidity"))
 humidityUnits = ttk.Label(airLabelFrame,text="%")
-pressureLabel = ttk.Label(airLabelFrame, text="airPressure",padding=4)
+pressureLabel = ttk.Label(airLabelFrame, text="Air Pressure",padding=4)
 airPressureTrace = airPressure.trace_add(mode="write",callback=lambda *args: LabelBold(pressureLabel,"Bold","airPressure"))
 pressureEntry = ttk.Entry(airLabelFrame,width="7",textvariable=airPressure,justify="right")
 pressureEntry.bind("<Return>",PressureEntryValidate)
@@ -2688,21 +2707,21 @@ windLabelFrame.grid_columnconfigure(2,minsize=75)
 windLabelFrame.grid_columnconfigure(3,weight=1)
 windLabelFrame.grid_rowconfigure((0,1,2),weight=1)
 windSeparator = ttk.Separator(windLabelFrame,orient="vertical")
-directionLabel = ttk.Label(windLabelFrame, text="windDirection",padding=4)
+directionLabel = ttk.Label(windLabelFrame, text="Wind Direction",padding=4)
 windDirectionTrace = windDirection.trace_add(mode="write",callback=lambda *args: LabelBold(directionLabel,"Bold","windDirection"))
-directionEntry = ttk.Entry(windLabelFrame,width=3,textvariable=windDirection,justify="right")
+directionEntry = ttk.Entry(windLabelFrame,width="3",textvariable=windDirection,justify="right")
 directionEntry.bind("<Return>",DirectionEntryValidate)
 directionEntry.bind("<Tab>",DirectionEntryValidate)
 directionEntry.bind("<Escape>",lambda *args: CancelSettingChange(StrVar=windDirection,label=directionLabel,stringvar="windDirection"))
 directionUnits = ttk.Label(windLabelFrame,text="°")
-magnitudeLabel = ttk.Label(windLabelFrame, text="windMagnitude",padding=4)
+magnitudeLabel = ttk.Label(windLabelFrame, text="Wind Magnitude",padding=4)
 windMagnitudeTrace = windMagnitude.trace_add(mode="write",callback=lambda *args: LabelBold(magnitudeLabel,"Bold","windMagnitude"))
-magnitudeEntry = ttk.Entry(windLabelFrame,width=4,textvariable=windMagnitude,justify="right")
+magnitudeEntry = ttk.Entry(windLabelFrame,width="5",textvariable=windMagnitude,justify="right")
 magnitudeEntry.bind("<Return>",MagnitudeEntryValidate)
 magnitudeEntry.bind("<Tab>",MagnitudeEntryValidate)
 magnitudeEntry.bind("<Escape>",lambda *args: CancelSettingChange(StrVar=windMagnitude,label=magnitudeLabel,stringvar="windMagnitude"))
 magnitudeUnits = ttk.Label(windLabelFrame,text="m/s")
-dynamicLabel = ttk.Label(windLabelFrame, text="windDynamic",padding=4)
+dynamicLabel = ttk.Label(windLabelFrame, text="Dynamic Wind",padding=4)
 dynamicCheckBox = ttk.Checkbutton(windLabelFrame,variable=windDynamic,onvalue=1,offvalue=0,padding=4)
 windDynamicTrace = windDynamic.trace_add(mode="write", callback=(lambda *args: Json_Save(source=0,newEntry={"windDynamic" : windDynamic.get()})))
 pane1pane.add(pane13,weight=0)
@@ -3121,14 +3140,15 @@ system_menu.add_radiobutton(label="M6",variable=system,value="M6")
 system_menu.add_radiobutton(label="L16",variable=system,value="L16")
 system_menu.add_radiobutton(label="L119",variable=system,value="L119")
 system_menu.add_radiobutton(label="Sholef",variable=system,value="Sholef")
+idfpSystemFrame.bind("<Button-3>",lambda event : system_menu.post(event.x_root,event.y_root))
+idfpSystemOutput.bind("<Button-3>",lambda event : system_menu.post(event.x_root,event.y_root))
+idfpSystemLabel.bind("<Button-3>",lambda event : system_menu.post(event.x_root,event.y_root))
+idfpSystemSep.bind("<Button-3>",lambda event : system_menu.post(event.x_root,event.y_root))
 terrain_menu = Menu(menubar,tearoff=False)
 
 terrainValue = StringVar()
 terrain_menu.add_command(label="Install New Height Map (Keithenneu)",command=HeightMapFileDialog)
 terrain_menu.add_separator()
-
-
-    
 
 flipPaneSide = StringVar()
 fmEditSafetyToggle = StringVar()
@@ -3139,7 +3159,7 @@ settings_menu.add_cascade(label="UKSF Login",menu=login_menu)
 login_menu.add_command(label="Login",command=LoginWindow)
 login_menu.add_command(label="Logout",state="disabled",command=Logout)
 settings_menu.add_command(label="Flip window panes", command=FlipWindowPanes)
-settings_menu.add_checkbutton(label="Fire Mission edit safety",offvalue= 0,onvalue= 1, variable=fmEditSafetyToggle)
+settings_menu.add_checkbutton(label="Target edit safety",offvalue= 0,onvalue= 1, variable=fmEditSafetyToggle)
 fmEditSafetyToggle.set(1)
 fmEditSafetyToggle.trace_add(mode="write",callback=RequestEditFireMissionsFromSafety)
 
@@ -3209,8 +3229,12 @@ idfpHeightFrame.grid(column=1,row=2,sticky="NEW")
 idfpHeightEntry.grid(column=0,row=0,sticky="NEW")
 idfpHeightUnitLabel.grid(column=1,row=0,sticky="NW")
 idfpButtonFrame.grid(column=2,row=2,rowspan=3,sticky="NEW")
-idfpAddButton.grid(column=0,row=0,sticky="NEW")
-idfpRemoveButton.grid(column=0,row=1,sticky="NEW")
+idfpSystemFrame.grid(column=0,row=0,sticky="NEWS")
+idfpSystemLabel.grid(column=0,row=0,sticky="NWS")
+idfpSystemSep.grid(column=1,row=0,sticky="NS")
+idfpSystemOutput.grid(column=2,row=0,sticky="NSE")
+idfpAddButton.grid(column=0,row=1,sticky="NEW")
+idfpRemoveButton.grid(column=0,row=2,sticky="NEW")
 idfpSeparator.grid(column=0,columnspan=2,row=3,sticky="EW",pady=4)
 idfpControlFrame.grid(column=0,columnspan=2,row=4,sticky="NEW")
 idfpEditChargeLabel.grid(column=0,row=0,sticky="NE")
