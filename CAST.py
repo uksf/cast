@@ -623,7 +623,6 @@ def StatusMessageLog(message = "",privateMessage = None):
 def StatusMessageErrorDump(e: Exception, errorMessage = ""):
     if errorMessage != "":
         StatusMessageLog(message=errorMessage)
-    print(e)
     try:
         excType, excValue, excTraceback = sys.exc_info()
         if excTraceback:
@@ -643,7 +642,6 @@ def LoginWindow(startup=False):
                 loginDetails = {"email" : email.get().strip(), "password" : password.get()}
                 password.set("")
                 localStorageToken = requests.post(url="https://api.uk-sf.co.uk/auth/login",json=loginDetails)
-                print(localStorageToken.json())
                 loginDetails = None
                 try:
                     authToken["token"] = localStorageToken.json()["token"]
@@ -2259,11 +2257,13 @@ def Calculate():
                                     maxHeight=maxTerrainHeight,
                                     windDirection=states["windDirection"],
                                     windMagnitude=states["windMagnitude"],
+                                    windDynamic=int(states["windDynamic"]),
                                     humidity=states["airHumidity"],
                                     temperature=states["airTemperature"],
                                     pressure=states["airPressure"],
                                     charge=charge
                                 )
+            print(solution)
             #############TERRAIN AVOIDANCE +1 Charge
             solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
             if details["Condition"] == "Time":
@@ -2272,6 +2272,8 @@ def Calculate():
                     "Minute": details["Time"]["Minute"],
                     "Second": details["Time"]["Second"]
                 }
+            if int(states["windDynamic"]) == 1:
+                solution
             del solution["LowPositions"]
             return solution
         elif details["Mutator"] == "Line":
@@ -2289,6 +2291,7 @@ def Calculate():
                     maxHeight=maxTerrainHeight,
                     windDirection=states["windDirection"],
                     windMagnitude=states["windMagnitude"],
+                    windDynamic=int(states["windDynamic"]),
                     humidity=states["airHumidity"],
                     temperature=states["airTemperature"],
                     pressure=states["airPressure"],
@@ -2319,6 +2322,7 @@ def Calculate():
                     maxHeight=maxTerrainHeight,
                     windDirection=states["windDirection"],
                     windMagnitude=states["windMagnitude"],
+                    windDynamic=int(states["windDynamic"]),
                     humidity=states["airHumidity"],
                     temperature=states["airTemperature"],
                     pressure=states["airPressure"],
@@ -2343,12 +2347,11 @@ def Calculate():
                 details = targets[mission][target]
                 idfpSelection = Json_Load(0,localOverride=True)["IDFPSelection"]
                 for idfp in [list(IDFPDict.keys())[i] for i in list(idfpSelection)]:
-                    try :
+                    #try :
                         StatusMessageLog(message=f"Beginning calculation of {mission}-{target}")
                         solution = solutions(details,idfp)
-                    except Exception as e:
-                        StatusMessageErrorDump(e,errorMessage=f"Failed to calculate {mission}-{target}")
-                    else:
+                    #except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to calculate {mission}-{target}")
+                    #else:
                         FireMissionUpdate(solution,idfp,f"{mission}-{target}")
                         StatusMessageLog(message="Calculated {}-{}, Range: {}m, Bearing: {:03d}°".format(mission,target,int(solution["Range"]),int(solution["Bearing"]*180/np.pi)))
                         statusMessageLabel.update()
@@ -2385,9 +2388,27 @@ def StandardFireMissionOutput(FireMissions: dict,idfp: str,textWidget: Text):
         except: None
         try:vertex = int(np.ceil(list(details["Vertex"])[2]/5)*5)
         except:vertex = details["Vertex"]
-        textWidget.insert(END,"\tTrajectory\t| {} \n\tTOF\t| {:0.1f} s\n\tVertex\t| FL {:03d} \n\tCharge\t| ".format(details["Trajectory"],float(details["TOF"]),vertex),("default","border"))
-        textWidget.insert(END,"{}\n".format(details["Charge"]),("bold","border"))
-        textWidget.insert(END,"\t-----------------------------------------------------------------------------------------------------------------------------------\n",("line","border"))
+        textWidget.insert(END,"\tTrajectory\t| {} \n\tTOF\t| {:0.1f} s\n\tVertex\t| FL {:03d}\n".format(details["Trajectory"],float(details["TOF"]),vertex),("default","border"))
+        try:
+            details["ParallelCorrection"]
+            textWidget.insert(END,"\t",("default","border"))
+            textWidget.insert(END,"Wind Magnitude\t| {:0.1f} m/s\t".format(np.round(float(details["WindMagnitude"])*10)/10),("default"))
+            textWidget.insert(END,"\n\t",("default","border"))
+            textWidget.insert(END,"Crosswind\t| ±",("default"))
+            textWidget.insert(END," {} ".format(int(np.round(float(details["PerpendicularCorrection"])))),("bold"))
+            textWidget.insert(END,"mils\t",("default"))
+            textWidget.insert(END,"\n\t",("default","border"))
+            textWidget.insert(END,"Head/Tailwind\t| ±",("default"))
+            textWidget.insert(END," {} ".format(int(np.round(float(details["ParallelCorrection"])))),("bold"))
+            textWidget.insert(END,"mils\t",("default"))
+            textWidget.insert(END,"\n",("default","border"))
+            textWidget.insert(END,"\t-----------------------------------------------------------------------------------------------------------------------------------\n",("line","border"))
+        except:
+            None
+        textWidget.insert(END,"")
+        textWidget.insert(END,"\tCharge\t| ".format(details["Trajectory"],float(details["TOF"]),vertex),("default","border"))
+        textWidget.insert(END," {} ".format(details["Charge"]),("bold","highlight"))
+        textWidget.insert(END,"\n\t-----------------------------------------------------------------------------------------------------------------------------------\n",("line","border"))
         textWidget.insert(END,"\tAzimuth\t| ",("default","border"))
         
         textWidget.insert(END," {:06.1f} ".format(details["Azimuth"]*3200/np.pi),("bold","highlight"))
@@ -2509,7 +2530,7 @@ def IDFPTextFrameConfiguration(idfpNotebookFrame: ttk.Frame):
     idfpNotebookFrame.grid_rowconfigure(1,minsize=20)
     idfpNotebookFrame.grid_columnconfigure(0,weight=1)
     idfpNotebookFrame.grid_columnconfigure(1,minsize=20)
-    idfpNotebookText = Text(idfpNotebookFrame,wrap="none",background="black",foreground="black",width=55,tabs=("2c","5c","6.5c"))#bg="#BBBBBB",
+    idfpNotebookText = Text(idfpNotebookFrame,wrap="none",background="black",foreground="black",width=55,tabs=("2c","5c","6.5c","3c"))#bg="#BBBBBB",
     idfpNotebookText.tag_configure("default",font=("Microsoft Tai Le",10),background="white")
     idfpNotebookText.tag_configure("line",font=("Microsoft Tai Le",4),background="white")
     idfpNotebookText.tag_configure("XY",font=("Microsoft Tai Le",12,"bold"),relief="ridge",borderwidth="3",spacing1=5,spacing2=5,spacing3=5,background="#2C5F2D",foreground="#FFE77A")
@@ -2520,6 +2541,7 @@ def IDFPTextFrameConfiguration(idfpNotebookFrame: ttk.Frame):
     idfpNotebookText.tag_configure("bold",font=("Microsoft Tai Le",10,"bold"),background="white")
     idfpNotebookText.tag_configure("border",relief="ridge",borderwidth="2",background="white")
     idfpNotebookText.tag_configure("highlight",relief="raised",borderwidth="2",background="white")
+    #idfpNotebookText.tag_configure("highlight",relief="raised",borderwidth="2",background="white")
     idfpNotebookText.tag_configure("divide",font=("Microsoft Tai Le",4),background="grey",bgstipple="@tempstipple.xbm")
     yScroll = Scrollbar(idfpNotebookFrame,orient="vertical",command=idfpNotebookText.yview)
     xScroll = Scrollbar(idfpNotebookFrame,orient="horizontal",command=idfpNotebookText.xview)
