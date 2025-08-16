@@ -1,5 +1,5 @@
-testCommandLine = ["--json","server"]
-version = "v0.0.2"
+testCommandLine = ["--json","local"]
+version = "v0.0.3"
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -99,11 +99,21 @@ def Json_Load(source : int,localOverride = False) -> dict | str:
             elif source == 6:
                 with open(exeDir/"Functions"/"ArtilleryConfigs.json",mode="r") as file:
                     return json.load(file)
-        except:
-            if source !=5:
+        except Exception as e:
+            if source == 0: source = "Common parameters"
+            elif source == 1: source = "IDFP position data"
+            elif source == 2: source = "Friendly position data"
+            elif source == 3: source = "Target position data"
+            elif source == 4: source = "Fire mission data"
+            elif source == 5:
+                StatusMessageErrorDump(e, errorMessage="Failed to load Message log, returning nothing")
                 return {}
-            else:
-                return ""
+            else: source = "Artillery Configurations"
+            StatusMessageErrorDump(e, errorMessage=f"Failed to load {source}, returning nothing")
+            return ""
+                
+                
+                
     elif jsonType ==1:
         global authToken
         try:
@@ -119,11 +129,18 @@ def Json_Load(source : int,localOverride = False) -> dict | str:
                 return json.loads(requests.get(url="https://api.uk-sf.co.uk/artillery/fireMissions",headers={"Authorization":"Bearer " + authToken["token"]}).json()["data"].replace("'",'"'))
             elif source == 5:
                 return str(json.loads(requests.get(url="https://api.uk-sf.co.uk/artillery/message_log",headers={"Authorization":"Bearer " + authToken["token"]}).json()["data"].replace("'",'"'))["message"])
-        except:
-            if source != 5:
+        except Exception as e:
+            if source == 0: source = "Common parameters"
+            elif source == 1: source = "IDFP position data"
+            elif source == 2: source = "Friendly position data"
+            elif source == 3: source = "Target position data"
+            elif source == 4: source = "Fire mission data"
+            elif source == 5:
+                StatusMessageErrorDump(e, errorMessage="Failed load Message log, returning nothing")
                 return {}
-            else:
-                return ""
+            else: source = "Artillery Configurations"
+            StatusMessageErrorDump(e, errorMessage=f"Failed load {source}, returning nothing")
+            return ""
 
 def Json_Save(source : int,newEntry : dict | str, append = True,localOverride = False) -> bool:
     """
@@ -171,21 +188,41 @@ def Json_Save(source : int,newEntry : dict | str, append = True,localOverride = 
                 with open(appdata_local/"UKSF"/"CAST"/"Message_Log.json","w") as file:
                     json.dump(data,file,indent=4)
             return True
-        except: return False
+        except Exception as e:
+            if source == 0: source = "Common parameters"
+            elif source == 1: source = "IDFP position data"
+            elif source == 2: source = "Friendly position data"
+            elif source == 3: source = "Target position data"
+            elif source == 4: source = "Fire mission data"
+            elif source == 5: source = "Message log"
+            else: source = "Artillery Configurations"
+            StatusMessageErrorDump(e, errorMessage=f"Failed to save {source}, returning False")
+            return False
     elif jsonType ==1:
-        if source == 0:
-            return requests.put(url="https://api.uk-sf.co.uk/artillery/common",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-        if source == 1:
-            return requests.put(url="https://api.uk-sf.co.uk/artillery/idfp",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-        if source == 2:
-            return requests.put(url="https://api.uk-sf.co.uk/artillery/friendly",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-        if source == 3:
-            return requests.put(url="https://api.uk-sf.co.uk/artillery/target",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-        if source == 4:
-            return requests.put(url="https://api.uk-sf.co.uk/artillery/fireMissions",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-        if source == 5:
-            return requests.put(url="https://api.uk-sf.co.uk/artillery/message_log",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-
+        try:
+            if source == 0:
+                return requests.put(url="https://api.uk-sf.co.uk/artillery/common",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
+            if source == 1:
+                return requests.put(url="https://api.uk-sf.co.uk/artillery/idfp",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
+            if source == 2:
+                return requests.put(url="https://api.uk-sf.co.uk/artillery/friendly",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
+            if source == 3:
+                return requests.put(url="https://api.uk-sf.co.uk/artillery/target",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
+            if source == 4:
+                return requests.put(url="https://api.uk-sf.co.uk/artillery/fireMissions",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
+            if source == 5:
+                return requests.put(url="https://api.uk-sf.co.uk/artillery/message_log",headers={"Authorization":"Bearer " + authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
+        except Exception as e:
+            if source == 0: source = "Common parameters"
+            elif source == 1: source = "IDFP position data"
+            elif source == 2: source = "Friendly position data"
+            elif source == 3: source = "Target position data"
+            elif source == 4: source = "Fire mission data"
+            elif source == 5: source = "Message log"
+            else: source = "Artillery Configurations"
+            StatusMessageErrorDump(e, errorMessage=f"Failed to save {source}, returning False")
+            return False
+        
 def Json_Delete(source : int,deleteKey = None,localOverride = False) -> bool:
     """
     deleteKey specifies the list or string of the key that needs to be deleted from the source
@@ -198,13 +235,25 @@ def Json_Delete(source : int,deleteKey = None,localOverride = False) -> bool:
     4 : Calculated fire missions
     5 : Message Log
     """
-    data = {}
-    if deleteKey != None:
-        data = Json_Load(source,localOverride)
-        if type(deleteKey) == str: deleteKey = [deleteKey]
-        for key in deleteKey:
-            data.pop(str(key),None) ############THIS IS DOING STUPID SHIT, CAN'T DELETE IDFPS
-    Json_Save(source,data,False,localOverride)
+    try:
+        data = {}
+        if deleteKey != None:
+            data = Json_Load(source,localOverride)
+            if type(deleteKey) == str: deleteKey = [deleteKey]
+            for key in deleteKey:
+                data.pop(str(key),None)
+        Json_Save(source,data,False,localOverride)
+    except Exception as e:
+            if source == 0: source = "Common parameters"
+            elif source == 1: source = "IDFP position data"
+            elif source == 2: source = "Friendly position data"
+            elif source == 3: source = "Target position data"
+            elif source == 4: source = "Fire mission data"
+            elif source == 5: source = "Message log"
+            else: source = "Artillery Configurations"
+            StatusMessageErrorDump(e, errorMessage=f"Failed to delete {source}, returning False")
+            return False
+
 
 
 
@@ -249,6 +298,8 @@ system = StringVar()
 """IDF system M6, L16, L119, Sholef"""
 terrain = StringVar()
 """String Name of terrain"""
+terrainTrace = ""
+"""variable to track the terrian trace"""
 
 messageLogOpen = 0
 messageLogText = Text()
@@ -543,7 +594,7 @@ def ListTerrainFolders():
                         terrains.append(dirName)
                         folders.append(os.path.join(dirpath,dirName))
                     else: StatusMessageLog(message=f"Folder does not have a valid height map file: {dirName}")
-            except: StatusMessageLog(message=f"Folder issue in map: {dirName}")
+            except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Folder issue in map: {dirName}")
     return(terrains,folders)
 
 terrainsFolders = []
@@ -556,11 +607,12 @@ def StatusMessageLog(message = "",privateMessage = None):
     global user
     if privateMessage == None:
         statusMessageLabel.config(text=message)
+    elif privateMessage == "Empty": None
     else:
         statusMessageLabel.config(text=privateMessage)
     if message != "":
         oldMessageLog = Json_Load(source=5)
-        Json_Save(source=5,newEntry=(str(datetime.now())[:-5] + "\t" + "|" + "\t" + user + "\t" + "|" + "\t" + message+"\n"),append=True)
+        Json_Save(source=5,newEntry=(str(datetime.now(timezone.utc))[:-11] + "\t" + "|" + "\t" + user + "\t" + "|" + "\t" + message+"\n"),append=True)
         if messageLogOpen == 1:
             messageLogText["state"] = "normal"
             messageLogText.delete("1.0","end")
@@ -571,43 +623,59 @@ def StatusMessageLog(message = "",privateMessage = None):
 def StatusMessageErrorDump(e: Exception, errorMessage = ""):
     if errorMessage != "":
         StatusMessageLog(message=errorMessage)
-    try: StatusMessageLog(message=f"Error details:\n\t{e}\n\t{type(e).__name__}\n\t{e.args}")
-    except: None
+    try:
+        excType, excValue, excTraceback = sys.exc_info()
+        if excTraceback:
+            StatusMessageLog(message=f"Error details:\n\tType: {str(excType)}\n\tError: {str(excValue)}\n\tdetails:\n\t\tfile: {excTraceback.tb_frame.f_code.co_filename.split('\\')[-1]}\n\t\tfunction: {excTraceback.tb_frame.f_code.co_name}\n\t\tline: {excTraceback.tb_lineno}",privateMessage="Empty")
+        else: StatusMessageLog(message=f"Failed error message")
+    except: StatusMessageLog(message=f"Failed error message")
 
 def LoginWindow(startup=False):
     """Opens the login window"""
     def Login():
-        global user
-        global authToken
-        loginMessage.grid()
-        loginMessage["text"] = "Logging in"
-        loginDetails = {"email" : email.get().strip(), "password" : password.get()}
-        password.set("")
-        localStorageToken = requests.post(url="https://api.uk-sf.co.uk/auth/login",json=loginDetails)
-        loginDetails = None
-        try:
-            authToken["token"] = localStorageToken.json()["token"]
-            loginAcount = requests.get(url="https://api.uk-sf.co.uk/accounts",headers={"Authorization":"Bearer " + localStorageToken.json()["token"]}) 
-            loginAcount.json()["displayName"]
-        except:
-            loginMessage["text"] = localStorageToken.json()["error"]
+        if email.get().strip() !="":
+            if password.get() !="":
+                global user
+                global authToken
+                loginMessage.grid()
+                loginMessage["text"] = "Logging in"
+                loginDetails = {"email" : email.get().strip(), "password" : password.get()}
+                password.set("")
+                localStorageToken = requests.post(url="https://api.uk-sf.co.uk/auth/login",json=loginDetails)
+                loginDetails = None
+                try:
+                    authToken["token"] = localStorageToken.json()["token"]
+                    loginAcount = requests.get(url="https://api.uk-sf.co.uk/accounts",headers={"Authorization":"Bearer " + localStorageToken.json()["token"]}) 
+                    loginAcount.json()["displayName"]
+                except:
+                    try:
+                        loginMessage["text"] = localStorageToken.json()["error"]
+                    except Exception as e:
+                        StatusMessageErrorDump(e,errorMessage="Failed to produce login error")
+                else:
+                    StatusMessageLog("Logged in as " + loginAcount.json()["displayName"])
+                    user = loginAcount.json()["displayName"]
+                    loginMessage["text"] = "Logged in as " + loginAcount.json()["displayName"]
+                    with open(file=appdata_local/"UKSF"/"CAST"/"auth.json",mode="w") as file:
+                        json.dump(localStorageToken.json(),file,indent=4)
+                    if startup == True:
+                        StartUp(login=True)
+                    login_menu.entryconfigure("Login",state=DISABLED)
+                    login_menu.entryconfigure("Logout",state=NORMAL)
+                    loginTopLevel.grab_release()
+                    loginTopLevel.destroy()
+                    return True
+            else:
+                loginMessage.grid()
+                loginMessage["text"] = "Enter Password"
+                loginPasswordEntry.focus_set()
         else:
-            StatusMessageLog("Logged in as " + loginAcount.json()["displayName"])
-            user = loginAcount.json()["displayName"]
-            loginMessage["text"] = "Logged in as " + loginAcount.json()["displayName"]
-            with open(file=appdata_local/"UKSF"/"CAST"/"auth.json",mode="w") as file:
-                json.dump(localStorageToken.json(),file,indent=4)
-            if startup == True:
-                StartUp(login=True)
-            login_menu.entryconfigure("Login",state=DISABLED)
-            login_menu.entryconfigure("Logout",state=NORMAL)
-            loginTopLevel.grab_release()
-            loginTopLevel.destroy()
-            return True
+            loginMessage.grid()
+            loginMessage["text"] = "Enter email address"
+            loginUsernameEntry.focus_set()
     def LoginClosed():
         loginTopLevel.grab_release()
         root.destroy()
-    
     loginTopLevel = Toplevel(root)
     loginTopLevel.grab_set()
     loginTopLevel.attributes("-topmost",True)
@@ -684,9 +752,11 @@ def IDFCalculatorClosed():
 root.protocol("WM_DELETE_WINDOW",IDFCalculatorClosed)
 
 def UpdateStringVar(StrVar: StringVar, value,trace=None,entryLabel=None):
-    if trace!=None:
-        StrVar.trace_remove(mode="write",cbname=trace)
-    StrVar.set(value)
+    try:
+        if trace!=None:
+            StrVar.trace_remove(mode="write",cbname=trace)
+        StrVar.set(value)
+    except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to set string variable {StrVar} to {value}")
 
 def NewHeightMapFile(filePath: str,terrainName: str,compression = True):
     """Add a new Height map file using https://github.com/Keithenneu/Beowulf.ArmaTerrainExport Information on how to install in the instructions doc"""
@@ -706,6 +776,8 @@ def NewHeightMapFile(filePath: str,terrainName: str,compression = True):
                 file.seek(-2,os.SEEK_CUR)
         except OSError:
             file.seek(0)
+        except Exception as e:
+            StatusMessageErrorDump(e,errorMessage="Failed to seek in file")
         end = file.readline().decode()
     start = start.replace("\n","").replace("\r","").split(sep=" ")
     end = end.replace("\n","").replace("\r","").split(sep=" ")
@@ -719,7 +791,7 @@ def NewHeightMapFile(filePath: str,terrainName: str,compression = True):
         with open(file=baseDir/"Terrains"/terrainName/(terrainName+".gzcsv"),mode="w") as outputfile:
             outputfile.write("")
         for line in file:
-            line = line.replace("\n","").replace("\r","").split(sep=" ")
+            line = line.replace("\n","").replace("\r","").split(sep=" ") # CHECK TO SEE IF THE LAST HEIGHTS ARE ADDED
             if xrow != int(line[0]) and line != start:
                 heights += str(rowList).replace("[","").replace("]","") + "\n"
                 if len(heights) > 175000000 and line[0]!= end[0]:
@@ -748,6 +820,8 @@ def NewHeightMapFile(filePath: str,terrainName: str,compression = True):
     statusProgressBar["value"] = 0
     statusProgressBar.update()
     statusProgressBar.stop()
+    global terrainTrace
+    terrain.trace_remove("write",cbname=terrainTrace)
     terrain_menu.add_radiobutton(label=terrainName,variable=terrain,value=terrainName)
     root.bell()
     TerrainFolderCheck()
@@ -806,16 +880,16 @@ def TerrainChange(*args):
     global maxTerrainHeight
     if terrain.get() != "":
         try:
-            StatusMessageLog("",privateMessage="Loading "+terrain.get().replace("_"," ")+ " Height map")
-            statusMessageLabel.update()
+            StatusMessageLog(privateMessage=F"Loading {terrain.get()} Height map")
+            statusMessageLabel.update_idletasks()
             Json_Save(source=0,newEntry={"terrain" : terrain.get()},localOverride=True)
             terrainHeightMap = pd.read_csv(baseDir/"Terrains"/terrain.get()/(terrain.get()+".gzcsv"),compression="gzip")
             maxRow, maxCol = terrainHeightMap.shape
             maxTerrainHeight = terrainHeightMap.to_numpy().max()
             StatusMessageLog("Loaded "+terrain.get().replace("_"," ")+ " Height map")
             root.bell()
-        except:
-            StatusMessageLog("Could not find terrain height map data for "+terrain.get().replace("_"," "))
+        except Exception as e:
+            StatusMessageErrorDump(e,errorMessage=f"Could not find terrain height map data for {terrain.get()}")
             terrain.set(-1)
             Json_Save(source=0,newEntry={"terrain" : terrain.get()},localOverride=True)
 
@@ -851,19 +925,21 @@ def ClearFireMission(mission = "", name = "",calculated = False):
         try:
             Json_Delete(source=3)
             StatusMessageLog(message=f"Deleted all target positions from JSON")
-        except: StatusMessageLog(message=f"Failed to delete target positions from JSON")
+        except Exception as e:
+            StatusMessageErrorDump(e,errorMessage=f"Failed to delete target positions from JSON")
         else:
             if calculated == True:
                 try:
                     Json_Delete(source=4)
                     StatusMessageLog(message=f"Deleted all calculated fire missions from JSON")
-                except: StatusMessageLog(message=f"Failed to delete calculated fire missions from JSON")
+                except Exception as e:
+                    StatusMessageErrorDump(e,errorMessage=f"Failed to delete calculated fire missions from JSON")
     else:
         if name =="":
             try:
                 Json_Delete(source=3,deleteKey=mission)
                 StatusMessageLog(message=f"Deleted {mission} target positions from JSON")
-            except: StatusMessageLog(message=f"Failed to delete {mission} target positions from JSON")
+            except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to delete {mission} target positions from JSON")
             else:
                 if calculated == True:
                     try:
@@ -874,14 +950,14 @@ def ClearFireMission(mission = "", name = "",calculated = False):
                                     FireMissions[idfp].pop(key,None)
                         Json_Save(source=4,newEntry=FireMissions,append=False)
                         StatusMessageLog(message=f"Deleted calculated {mission} fire missions from JSON")
-                    except: StatusMessageLog(message=f"Failed to delete calculated {mission} fire missions from JSON")
+                    except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to delete calculated {mission} fire missions from JSON")
         else:
             try:
                 targets = Json_Load(source=3)
                 targets[mission].pop(name)
                 Json_Save(source=3,newEntry=targets,append=False)
                 StatusMessageLog(message=f"Deleted {mission}-{name} target position from JSON")
-            except:StatusMessageLog(message=f"Failed to delete {mission}-{name} target position from JSON")
+            except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to delete {mission}-{name} target position from JSON")
             else:
                 if calculated == True:
                     try:
@@ -890,26 +966,32 @@ def ClearFireMission(mission = "", name = "",calculated = False):
                             FireMissions[idfp].pop(f"{mission}-{name}",None)
                         Json_Save(source=4,newEntry=FireMissions,append=False)
                         StatusMessageLog(message=f"Deleted calculated mission {mission}-{name} from JSON")
-                    except: StatusMessageLog(message=f"Failed to delete calculated mission {mission}-{name} from JSON")
+                    except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to delete calculated mission {mission}-{name} from JSON")
     UpdateSync([3,4])
 def ClearIDFP(IDFP = None):
     """Will clear either all IDFPs or the specified IDFP string"""
     if IDFP == None:
-        Json_Delete(source=1)
-        Json_Delete(source=4)
-        for tabId in idfpNotebook.tabs():
-            idfpNotebook.forget(tabId)
-        UpdateSync(1)
-        StatusMessageLog("Cleared IDFPs")
-    else:
-        Json_Delete(source=1,deleteKey=IDFP)
-        Json_Delete(source=4,deleteKey=IDFP)
-        for tabId in idfpNotebook.tabs():
-            if idfpNotebook.tab(tabId,option="text") == IDFP:
+        try:
+            Json_Delete(source=1)
+            Json_Delete(source=4)
+            for tabId in idfpNotebook.tabs():
                 idfpNotebook.forget(tabId)
-                break
-        UpdateSync(1)
-        StatusMessageLog(message=("Cleared "+IDFP))
+            UpdateSync(1)
+            StatusMessageLog("Cleared IDFPs")
+        except Exception as e:
+            StatusMessageErrorDump(e,errorMessage="Failed to delete IDFPs from JSON")
+    else:
+        try:
+            Json_Delete(source=1,deleteKey=IDFP)
+            Json_Delete(source=4,deleteKey=IDFP)
+            for tabId in idfpNotebook.tabs():
+                if idfpNotebook.tab(tabId,option="text") == IDFP:
+                    idfpNotebook.forget(tabId)
+                    break
+            UpdateSync(1)
+            StatusMessageLog(message=("Cleared "+IDFP))
+        except Exception as e:
+            StatusMessageErrorDump(e,errorMessage=f"Failed to delete {IDFP} from JSON")
 def ClearFriendlyPositions():
     Json_Delete(source=2)
     StatusMessageLog("Cleared friendly positions")
@@ -987,30 +1069,35 @@ def SystemChange(*args,newSystem = None,set = False):
         except:
             try:
                 Json_Save(source=0,newEntry={"system" : system.get()})
-            except: StatusMessageLog(message="",privateMessage="Could not find original system in JSON")
+            except Exception as e: StatusMessageErrorDump(e, errorMessage="Could not save current system to JSON after not finding the original system in JSON")
             else:
                 StatusMessageLog(f"Changed artillery system to {system.get()}")
                 StatusMessageLog(message="",privateMessage="Could not find original system in JSON")
         else:
             try:
                 Json_Save(source=0,newEntry={"system" : system.get()})
-            except: StatusMessageLog(message="",privateMessage="Could not save system to JSON")
+            except Exception as e: StatusMessageErrorDump(e,errorMessage="Could not save current system to JSON")
             else:
                 StatusMessageLog(f"Changed artillery system from {oldSystem} to {system.get()}")
+        try: idfpSystemOutput["text"] = system.get()
+        except: idfpSystemOutput["text"] = "Error"
         StatusMessageLog("System Change: If pre-existing IDFP selections are present, check selection charges, trajectories and old calculations")
     # For Saving from JSON
     else:
         try:
             oldSystem = system.get()
             system.set(newSystem)
+            idfpSystemOutput["text"] = newSystem
             StatusMessageLog(f"Artillery system has changed from {oldSystem} to {newSystem}") if oldSystem !="" else StatusMessageLog(f"Artillery system set to {newSystem}")
             StatusMessageLog(message="",privateMessage="System Change: If pre-existing IDFP selections are present, check selection charges, trajectories and old calculations")
-        except: StatusMessageLog(message="Could not load system from JSON")
+        except Exception as e: StatusMessageErrorDump(e,message="Could not set system from JSON")
     systemTrace = system.trace_add(mode = "write", callback=lambda *args: SystemChange(newSystem=system.get(),set=True))
     settings_to_process["system"]["traceName"] = systemTrace 
     systems = Json_Load(6)
-    idfpEditChargeComboBox["values"] = systems[system.get()]["Charges"]
-    idfpEditTrajComboBox["values"] = systems[system.get()]["Trajectories"]
+    try:
+        idfpEditChargeComboBox["values"] = systems[system.get()]["Charges"]
+        idfpEditTrajComboBox["values"] = systems[system.get()]["Trajectories"]
+    except Exception as e: StatusMessageErrorDump(e,errorMessage="Failed to set system combo boxes or load system configurations")
 
 def IDFPListInitialise():
     """Updates the list of IDFPs in the list box, it also selects the previous selections made both from last session and just before the listbox is udpated"""
@@ -1018,24 +1105,24 @@ def IDFPListInitialise():
         idfpFile = Json_Load(1)
         idfpList.set(list(idfpFile.keys()))
         idfpNameCombobox["values"] = list(idfpFile.keys())
-    except:
-        StatusMessageLog(message="Failed to Load IDFPs from JSON")
+    except Exception as e:
+        StatusMessageErrorDump(e,errorMessage="Failed to Load IDFPs from JSON")
         return None
     try:
         idfpSelection = (Json_Load(source=0,localOverride=True))["IDFPSelection"]
         if idfpSelection != None or idfpSelection != [-1]:
             for select in idfpSelection:
                 idfpListbox.selection_set(select,select)
-    except:
-        StatusMessageLog(message="Failed to Load last IDFP selections")
+    except Exception as e:
+        StatusMessageErrorDump(e,errorMessage="Failed to Load last IDFP selections")
         Json_Save(0,{"IDFPSelection":[]},localOverride=True)
 
 def IDFPUpdate(idfp):
     try:
         idfpList.set(list(idfp))
         idfpNameCombobox["values"] = list(idfp)
-    except:
-        StatusMessageLog(message="Failed to Load IDFPs from JSON")
+    except Exception as e:
+        StatusMessageErrorDump(e,errorMessage="Failed to Load IDFPs from JSON")
 
 def IdfpListBoxChange(option):
     oldList = Json_Load(0,True)
@@ -1122,13 +1209,15 @@ def IDFPPositionAddUpdate():
             }
             try: Json_Load(1)[idfpName.get()]
             except KeyError: StatusMessageLog(message=f"{idfpName.get()} has been added at position {idfpPosX.get()}, {idfpPosY.get()} at {idfpHeight.get()} m")
+            except Exception as e: StatusMessageErrorDump(e,errorMessage="Error loading the IDFP")
             else: StatusMessageLog(message=f"{idfpName.get()} has been updated, position {idfpPosX.get()}, {idfpPosY.get()} at {idfpHeight.get()} m")
             Json_Save(1,newPos)
+            
             UpdateSync(1)
             LabelBold(idfpNameLabel,"Normal","idfpName")
             boldLables["idfpName"] = False
-    except: pass
-
+    except Exception as e:
+        StatusMessageErrorDump(e,errorMessage="Failed to Add/Update IDFP")
 
 def IDFPPositionRemove(*args,name):
     if name != "":
@@ -1136,7 +1225,9 @@ def IDFPPositionRemove(*args,name):
             Json_Delete(source=1,deleteKey=name)
             idfpListbox.select_clear(0,END)
             UpdateSync(1)
-        except: pass
+        except Exception as e:
+            StatusMessageErrorDump(e,errorMessage=f"Failed to delete {name}")
+            pass
         else:
             StatusMessageLog(message=name + " has been deleted")
             try:
@@ -1257,8 +1348,8 @@ def MagnitudeEntryValidate(*args):
 def FriendliesUpdate(jsonKeys):
     try: friendlyNameCombobox["values"] = list(jsonKeys)
     except KeyError: pass
-    except:
-        StatusMessageLog(message="Failed to Load friendlies from JSON")
+    except Exception as e:
+        StatusMessageErrorDump(e, errorMessage="Failed to Load friendlies from JSON")
 
 def FriendlyHeightAutoFill(event):
     if event.keysym=="Return" or event.keysym=="Tab":
@@ -1328,13 +1419,15 @@ def FriendlyPositionAddUpdate():
             UpdateSync(2)
             LabelBold(friendlyNameLabel,"Normal","friendlyName")
             boldLables["friendlyName"] = False
-    except: pass
+    except Exception as e:
+        StatusMessageErrorDump(e,errorMessage="Failed to Add/Update Friendly position")
 
 def FriendlyPositionRemove(*args,name):
     if name != "":
         try:
             Json_Delete(source=2,deleteKey=name)
-        except: pass
+        except KeyError: StatusMessageLog(message="Failed to delete friendly position")
+        except Exception as e: StatusMessageErrorDump(e,errorMessage="Failed to delete friendly position")
         else:
             StatusMessageLog(message=name + " has been deleted")
         UpdateSync(2)
@@ -1435,9 +1528,9 @@ def UpdateSync(setting = None):
                 results['targets'] = Json_Load(source=3)##################SORT OUT TARGETS
             if setting == 4:
                 results['fire mission'] = Json_Load(source=4)
-                print(Json_Load(source=4))
         except Exception as e:
             results['error'] = f"Failed to load JSON: {str(e)}"
+            StatusMessageErrorDump(e,errorMessage=f"Failed to load JSON: {str(e)}")
         # Put results in queue instead of calling root.after()
         update_queue.put(('process_results', results, setting))
     
@@ -1481,18 +1574,24 @@ def ProcessCommonSettings(common):
             StatusMessageLog(f"{settingName} key does not exist in JSON")
             Json_Save(0,newEntry={jsonName:""})
             return
-        except Exception:
-            StatusMessageLog(f"Failed to load {settingName} from JSON")
+        except Exception as e:
+            StatusMessageErrorDump(e,errorMessage=f"Failed to load {settingName} from JSON")
             return
-        
-        #try: 
-                
-        if stringVariable.get() != str(setting_value) and stringVariable!="":
-            if jsonName == "system":
-                SystemChange(newSystem=setting_value)
-            else:
-                if jsonName in boldLables.keys():
-                    if boldLables[jsonName] == False:
+        try:       
+            if stringVariable.get() != str(setting_value) and stringVariable!="":
+                if jsonName == "system":
+                    SystemChange(newSystem=setting_value)
+                else:
+                    if jsonName in boldLables.keys():
+                        if boldLables[jsonName] == False:
+                            UpdateStringVar(stringVariable, setting_value,trace)
+                            if trace!=None:
+                                if stringVariable == windDynamic:
+                                    trace = windDynamic.trace_add(mode="write", callback=(lambda *args: Json_Save(source=0,newEntry={"windDynamic" : windDynamic.get()})))
+                                if entryLabel!=None:
+                                    trace = stringVariable.trace_add(mode="write",callback=lambda *args: LabelBold(entryLabel,"Bold",jsonName))
+                                settings_to_process[jsonName]["traceName"] = trace
+                    else:
                         UpdateStringVar(stringVariable, setting_value,trace)
                         if trace!=None:
                             if stringVariable == windDynamic:
@@ -1500,17 +1599,8 @@ def ProcessCommonSettings(common):
                             if entryLabel!=None:
                                 trace = stringVariable.trace_add(mode="write",callback=lambda *args: LabelBold(entryLabel,"Bold",jsonName))
                             settings_to_process[jsonName]["traceName"] = trace
-                else:
-                    UpdateStringVar(stringVariable, setting_value,trace)
-                    if trace!=None:
-                        if stringVariable == windDynamic:
-                            trace = windDynamic.trace_add(mode="write", callback=(lambda *args: Json_Save(source=0,newEntry={"windDynamic" : windDynamic.get()})))
-                        if entryLabel!=None:
-                            trace = stringVariable.trace_add(mode="write",callback=lambda *args: LabelBold(entryLabel,"Bold",jsonName))
-                        settings_to_process[jsonName]["traceName"] = trace
-                #except Exception as e:
-                #print(e)
-                #StatusMessageLog(f"Failed to set {settingName}")
+        except Exception as e:
+            StatusMessageErrorDump(e,errorMessage=f"Failed to set {settingName}")
     
     # List of settings to process
     # settings_to_process = [
@@ -1543,6 +1633,7 @@ def CheckUpdateQueue():
                 # Add other task types here if needed
     except queue.Empty:
         pass  # No updates to process
+    except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to update iterative settings, queue size: {str(update_queue.qsize())}")
     root.after(200,CheckUpdateQueue)
     #FIRE MISSIONS
 
@@ -1700,23 +1791,32 @@ def FireMissionEffectUpdate(*args):
                 int(fireMissionWidth.get())
                 int(fireMissionDepth.get())
                 mutator = "Box"
-            except:
+            except ValueError:
                 try: int(fireMissionWidth.get())
                 except: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
                 try: int(fireMissionDepth.get())
                 except: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+            except Exception as e:
+                StatusMessageErrorDump(e,errorMessage="Failed to Update fire mission due to width/depth")
+                return
         elif fireMissionDepth.get() != "0" and fireMissionDepth.get() != "":
             try:
                 int(fireMissionDepth.get())
                 mutator = "Line"
                 orientation = "Vertical"
-            except: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+            except ValueError: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+            except Exception as e:
+                StatusMessageErrorDump(e,errorMessage="Failed to Update fire mission due to depth")
+                return
         elif fireMissionWidth.get() != "0" and fireMissionWidth.get() != "":
             try:
                 int(fireMissionWidth.get())
                 mutator = "Line"
                 orientation = "Horizontal"
-            except: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
+            except ValueError: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
+            except Exception as e:
+                StatusMessageErrorDump(e,errorMessage="Failed to Update fire mission due to width/depth")
+                return
         changeFiremission = (int(float(targets[prefix][target]["Width"])*2) == int(fireMissionWidth.get()) and
                              int(float(targets[prefix][target]["Depth"])*2) == int(fireMissionDepth.get()))
         if changeFiremission: 
@@ -1844,15 +1944,18 @@ def create_checkboxes(frame: ttk.Frame, Checkbox_vars,seriesDict,FPFSelection = 
                 pyperclip.copy(grid)
             StatusMessageLog(privateMessage=f"Copied {prefix}-{text} grid {grid} to clipboard")
         except Exception as e:
-            StatusMessageErrorDump(e)
+            StatusMessageErrorDump(e,errorMessage=f"Failed to copy grid from {prefix}-{text}")
     def ClockSplashOffset(widget: Widget,text,prefix):
         global clockHandOffset
         try:
             if widget.winfo_exists():
                 clockHandOffset = (float(Json_Load(source=4)[idfpNotebook.tab(idfpNotebook.select(),"text")][prefix+"-"+widget.cget("text")]["TOF"]))
+                clockOffset.set(f"{prefix}-{widget.cget("text")}")
             else:
                 clockHandOffset = (float(Json_Load(source=4)[idfpNotebook.tab(idfpNotebook.select(),"text")][text]["TOF"]))
-        except: None
+                clockOffset.set(text)
+        except KeyError: StatusMessageLog(message=f"Calculated Fire Mission {prefix}-{text} is not found or calculated")
+        except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to send Clock splash offset from {prefix}-{text}")
     targetContextMenu = Menu(root,tearoff=False)
     global FPFEditSelected
     for widget in frame.winfo_children():
@@ -1957,7 +2060,6 @@ def TargetsUpdate(targetJSON):
                 try:
                     listCheckBox_vars[prefix][target]
                 except KeyError:
-                    
                     listCheckBox_vars[prefix][target] = (BooleanVar(),BooleanVar())
                     sorted_items = Sort_FireMissions(listCheckBox_vars[prefix])
                     create_checkboxes(canvasFrame,{key: listCheckBox_vars[prefix][key] for key in sorted_items},seriesDict[prefix])
@@ -2021,21 +2123,25 @@ def TargetAdd():
                     mutator = "Box"
                 except:
                     try: int(fireMissionWidth.get())
-                    except: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
+                    except ValueError: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
+                    except Exception as e: StatusMessageErrorDump(e,errorMessage="Incorrect Width dispersion, defaulting to no diserpsion")
                     try: int(fireMissionDepth.get())
-                    except: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+                    except ValueError: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+                    except Exception as e: StatusMessageErrorDump(e,errorMessage="Incorrect Depth dispersion, defaulting to no diserpsion")
             elif fireMissionDepth.get() != "0" and fireMissionDepth.get() != "":
                 try:
                     int(fireMissionDepth.get())
                     mutator = "Line"
                     orientation = "Vertical"
-                except: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+                except ValueError: StatusMessageLog(message="Incorrect Depth dispersion, defaulting to no diserpsion")
+                except Exception as e: StatusMessageErrorDump(e,errorMessage="Incorrect Depth dispersion, defaulting to no diserpsion")
             elif fireMissionWidth.get() != "0" and fireMissionWidth.get() != "":
                 try:
                     int(fireMissionWidth.get())
                     mutator = "Line"
                     orientation = "Horizontal"
-                except: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
+                except ValueError: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
+                except Exception as e: StatusMessageErrorDump(e,errorMessage="Incorrect Width dispersion, defaulting to no diserpsion")
             targetList[prefix][new_item]= {
                 "GridX" : targetPosX.get(),
                 "GridY" : targetPosY.get(),
@@ -2074,14 +2180,11 @@ def TargetAdd():
 
 def FireMissionLoadInfo(newfireMissions):
     global FireMissions
-    print(newfireMissions,FireMissions)
     if newfireMissions != FireMissions:
         FireMissions = newfireMissions
         FireMissionDisplayTabUpdate(FireMissions)
         FireMissionDisplayUpdate(FireMissions)
         
-
-
 
 def update_scrollregion(frame: ttk.Frame,canvas: Canvas):
     frame.update_idletasks()
@@ -2115,8 +2218,8 @@ def Calculate():
                     elif targets[mission][target]["Mutator"] == "LineMultiPoint":
                         if targets[mission][target]["Explicit"] == True:
                             calculations += 1
-                except:
-                    None
+                except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to get {mission}-{target} mutator")
+                    
 
     CalculationPhasesTotal("FPF")
     CalculationPhasesTotal("LR")
@@ -2133,8 +2236,8 @@ def Calculate():
                 elif targets["Group"][target]["Mutator"] == "LineMultiPoint":
                     if targets["Group"][target]["Explicit"] == True:
                         calculations += 2
-            except:
-                None
+            except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to get Combo mission-{target} mutator")
+
     statusProgressBar["maximum"] = int(calculations)
     states = {}
     IDFPDict = {}
@@ -2154,11 +2257,13 @@ def Calculate():
                                     maxHeight=maxTerrainHeight,
                                     windDirection=states["windDirection"],
                                     windMagnitude=states["windMagnitude"],
+                                    windDynamic=int(states["windDynamic"]),
                                     humidity=states["airHumidity"],
                                     temperature=states["airTemperature"],
                                     pressure=states["airPressure"],
                                     charge=charge
                                 )
+            print(solution)
             #############TERRAIN AVOIDANCE +1 Charge
             solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
             if details["Condition"] == "Time":
@@ -2167,6 +2272,8 @@ def Calculate():
                     "Minute": details["Time"]["Minute"],
                     "Second": details["Time"]["Second"]
                 }
+            if int(states["windDynamic"]) == 1:
+                solution
             del solution["LowPositions"]
             return solution
         elif details["Mutator"] == "Line":
@@ -2184,6 +2291,7 @@ def Calculate():
                     maxHeight=maxTerrainHeight,
                     windDirection=states["windDirection"],
                     windMagnitude=states["windMagnitude"],
+                    windDynamic=int(states["windDynamic"]),
                     humidity=states["airHumidity"],
                     temperature=states["airTemperature"],
                     pressure=states["airPressure"],
@@ -2214,6 +2322,7 @@ def Calculate():
                     maxHeight=maxTerrainHeight,
                     windDirection=states["windDirection"],
                     windMagnitude=states["windMagnitude"],
+                    windDynamic=int(states["windDynamic"]),
                     humidity=states["airHumidity"],
                     temperature=states["airTemperature"],
                     pressure=states["airPressure"],
@@ -2238,12 +2347,11 @@ def Calculate():
                 details = targets[mission][target]
                 idfpSelection = Json_Load(0,localOverride=True)["IDFPSelection"]
                 for idfp in [list(IDFPDict.keys())[i] for i in list(idfpSelection)]:
-                    try :
+                    #try :
                         StatusMessageLog(message=f"Beginning calculation of {mission}-{target}")
                         solution = solutions(details,idfp)
-                    except:
-                        StatusMessageLog(message=f"Failed to calculate {mission}-{target}")
-                    else:
+                    #except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to calculate {mission}-{target}")
+                    #else:
                         FireMissionUpdate(solution,idfp,f"{mission}-{target}")
                         StatusMessageLog(message="Calculated {}-{}, Range: {}m, Bearing: {:03d}°".format(mission,target,int(solution["Range"]),int(solution["Bearing"]*180/np.pi)))
                         statusMessageLabel.update()
@@ -2254,9 +2362,6 @@ def Calculate():
     CalculationIteration("XY")
     CalculationIteration("Combo")
     root.bell()
-                       
-                    
-    
 
 
 def StandardFireMissionOutput(FireMissions: dict,idfp: str,textWidget: Text):
@@ -2283,9 +2388,27 @@ def StandardFireMissionOutput(FireMissions: dict,idfp: str,textWidget: Text):
         except: None
         try:vertex = int(np.ceil(list(details["Vertex"])[2]/5)*5)
         except:vertex = details["Vertex"]
-        textWidget.insert(END,"\tTrajectory\t| {} \n\tTOF\t| {:0.1f} s\n\tVertex\t| FL {:03d} \n\tCharge\t| ".format(details["Trajectory"],float(details["TOF"]),vertex),("default","border"))
-        textWidget.insert(END,"{}\n".format(details["Charge"]),("bold","border"))
-        textWidget.insert(END,"\t-----------------------------------------------------------------------------------------------------------------------------------\n",("line","border"))
+        textWidget.insert(END,"\tTrajectory\t| {} \n\tTOF\t| {:0.1f} s\n\tVertex\t| FL {:03d}\n".format(details["Trajectory"],float(details["TOF"]),vertex),("default","border"))
+        try:
+            details["ParallelCorrection"]
+            textWidget.insert(END,"\t",("default","border"))
+            textWidget.insert(END,"Wind Magnitude\t| {:0.1f} m/s\t".format(np.round(float(details["WindMagnitude"])*10)/10),("default"))
+            textWidget.insert(END,"\n\t",("default","border"))
+            textWidget.insert(END,"Crosswind\t| ±",("default"))
+            textWidget.insert(END," {} ".format(int(np.round(float(details["PerpendicularCorrection"])))),("bold"))
+            textWidget.insert(END,"mils\t",("default"))
+            textWidget.insert(END,"\n\t",("default","border"))
+            textWidget.insert(END,"Head/Tailwind\t| ±",("default"))
+            textWidget.insert(END," {} ".format(int(np.round(float(details["ParallelCorrection"])))),("bold"))
+            textWidget.insert(END,"mils\t",("default"))
+            textWidget.insert(END,"\n",("default","border"))
+            textWidget.insert(END,"\t-----------------------------------------------------------------------------------------------------------------------------------\n",("line","border"))
+        except:
+            None
+        textWidget.insert(END,"")
+        textWidget.insert(END,"\tCharge\t| ".format(details["Trajectory"],float(details["TOF"]),vertex),("default","border"))
+        textWidget.insert(END," {} ".format(details["Charge"]),("bold","highlight"))
+        textWidget.insert(END,"\n\t-----------------------------------------------------------------------------------------------------------------------------------\n",("line","border"))
         textWidget.insert(END,"\tAzimuth\t| ",("default","border"))
         
         textWidget.insert(END," {:06.1f} ".format(details["Azimuth"]*3200/np.pi),("bold","highlight"))
@@ -2407,7 +2530,7 @@ def IDFPTextFrameConfiguration(idfpNotebookFrame: ttk.Frame):
     idfpNotebookFrame.grid_rowconfigure(1,minsize=20)
     idfpNotebookFrame.grid_columnconfigure(0,weight=1)
     idfpNotebookFrame.grid_columnconfigure(1,minsize=20)
-    idfpNotebookText = Text(idfpNotebookFrame,wrap="none",background="black",foreground="black",width=55,tabs=("2c","5c","6.5c"))#bg="#BBBBBB",
+    idfpNotebookText = Text(idfpNotebookFrame,wrap="none",background="black",foreground="black",width=55,tabs=("2c","5c","6.5c","3c"))#bg="#BBBBBB",
     idfpNotebookText.tag_configure("default",font=("Microsoft Tai Le",10),background="white")
     idfpNotebookText.tag_configure("line",font=("Microsoft Tai Le",4),background="white")
     idfpNotebookText.tag_configure("XY",font=("Microsoft Tai Le",12,"bold"),relief="ridge",borderwidth="3",spacing1=5,spacing2=5,spacing3=5,background="#2C5F2D",foreground="#FFE77A")
@@ -2418,6 +2541,7 @@ def IDFPTextFrameConfiguration(idfpNotebookFrame: ttk.Frame):
     idfpNotebookText.tag_configure("bold",font=("Microsoft Tai Le",10,"bold"),background="white")
     idfpNotebookText.tag_configure("border",relief="ridge",borderwidth="2",background="white")
     idfpNotebookText.tag_configure("highlight",relief="raised",borderwidth="2",background="white")
+    #idfpNotebookText.tag_configure("highlight",relief="raised",borderwidth="2",background="white")
     idfpNotebookText.tag_configure("divide",font=("Microsoft Tai Le",4),background="grey",bgstipple="@tempstipple.xbm")
     yScroll = Scrollbar(idfpNotebookFrame,orient="vertical",command=idfpNotebookText.yview)
     xScroll = Scrollbar(idfpNotebookFrame,orient="horizontal",command=idfpNotebookText.xview)
@@ -2475,7 +2599,7 @@ def FireMissionDisplayTabUpdate(FireMissions):
         if idfpNotebook.tab(tabId,option="text") not in FireMissions.keys():
             idfpNotebook.forget(tabId)
             try: del idfpNotebookFrameDict[idfpNotebook.tab(tabId,option="text")]
-            except: StatusMessageLog(message="Failed to remove Fire Mission")
+            except Exception as e: StatusMessageErrorDump(e,errorMessage="Failed to remove Fire Missions")
     for idfp in FireMissions.keys():
         if idfp not in tabs:
             idfpNotebookFrame = ttk.Frame(idfpNotebook,width="500")
@@ -2618,8 +2742,16 @@ idfpHeightEntry = ttk.Entry(idfpHeightFrame, justify="center",textvariable=idfpH
 idfpHeightUnitLabel = ttk.Label(idfpHeightFrame,text="m")
 idfpButtonFrame = ttk.Frame(idfpCreationFrame,padding=5)
 idfpButtonFrame.grid_columnconfigure(0,weight=1)
-idfpButtonFrame.grid_rowconfigure(0,weight=5)
-idfpButtonFrame.grid_rowconfigure(1,weight=1)
+#idfpButtonFrame.grid_rowconfigure(0,weight=5)
+idfpButtonFrame.grid_rowconfigure((0,1,2),weight=1)
+idfpSystemFrame = ttk.Frame(idfpButtonFrame,padding=4,relief="solid")
+idfpSystemFrame.grid_columnconfigure(0,minsize=9,weight=1)
+idfpSystemFrame.grid_columnconfigure(1,minsize=4)
+idfpSystemFrame.grid_columnconfigure(2,minsize=9,weight=5)
+idfpSystemFrame.grid_rowconfigure(0,weight=1)
+idfpSystemLabel = ttk.Label(idfpSystemFrame,text="System")
+idfpSystemSep = ttk.Separator(idfpSystemFrame,orient="vertical")
+idfpSystemOutput = ttk.Label(idfpSystemFrame,text="None",justify="right")
 idfpAddButton = ttk.Button(idfpButtonFrame,text="Add/Update",command=IDFPPositionAddUpdate)
 idfpRemoveButton = ttk.Button(idfpButtonFrame,text="Remove",command=lambda: IDFPPositionRemove(name=idfpName.get()))
 idfpSeparator = ttk.Separator(idfpCreationFrame,orient="horizontal")
@@ -2667,14 +2799,14 @@ temperatureEntry.bind("<Return>",TemperatureEntryValidate)
 temperatureEntry.bind("<Tab>",TemperatureEntryValidate)
 temperatureEntry.bind("<Escape>",lambda *args: CancelSettingChange(StrVar=airTemperature,label=temperatureLabel,stringvar="airTemperature"))
 temperatureUnits = ttk.Label(airLabelFrame,text="°C")
-humidityLabel = ttk.Label(airLabelFrame, text="airHumidity",padding=4)
+humidityLabel = ttk.Label(airLabelFrame, text="Air Humidity",padding=4)
 airHumidityTrace = airHumidity.trace_add(mode="write",callback=lambda *args: LabelBold(humidityLabel,"Bold","airHumidity"))
-humidityEntry = ttk.Entry(airLabelFrame,width="4",textvariable=airHumidity,justify="right")
+humidityEntry = ttk.Entry(airLabelFrame,width="5",textvariable=airHumidity,justify="right")
 humidityEntry.bind("<Return>",HumidityEntryValidate)
 humidityEntry.bind("<Tab>",HumidityEntryValidate)
 humidityEntry.bind("<Escape>",lambda *args: CancelSettingChange(StrVar=airHumidity,label=humidityLabel,stringvar="airHumidity"))
 humidityUnits = ttk.Label(airLabelFrame,text="%")
-pressureLabel = ttk.Label(airLabelFrame, text="airPressure",padding=4)
+pressureLabel = ttk.Label(airLabelFrame, text="Air Pressure",padding=4)
 airPressureTrace = airPressure.trace_add(mode="write",callback=lambda *args: LabelBold(pressureLabel,"Bold","airPressure"))
 pressureEntry = ttk.Entry(airLabelFrame,width="7",textvariable=airPressure,justify="right")
 pressureEntry.bind("<Return>",PressureEntryValidate)
@@ -2688,21 +2820,21 @@ windLabelFrame.grid_columnconfigure(2,minsize=75)
 windLabelFrame.grid_columnconfigure(3,weight=1)
 windLabelFrame.grid_rowconfigure((0,1,2),weight=1)
 windSeparator = ttk.Separator(windLabelFrame,orient="vertical")
-directionLabel = ttk.Label(windLabelFrame, text="windDirection",padding=4)
+directionLabel = ttk.Label(windLabelFrame, text="Wind Direction",padding=4)
 windDirectionTrace = windDirection.trace_add(mode="write",callback=lambda *args: LabelBold(directionLabel,"Bold","windDirection"))
-directionEntry = ttk.Entry(windLabelFrame,width=3,textvariable=windDirection,justify="right")
+directionEntry = ttk.Entry(windLabelFrame,width="3",textvariable=windDirection,justify="right")
 directionEntry.bind("<Return>",DirectionEntryValidate)
 directionEntry.bind("<Tab>",DirectionEntryValidate)
 directionEntry.bind("<Escape>",lambda *args: CancelSettingChange(StrVar=windDirection,label=directionLabel,stringvar="windDirection"))
 directionUnits = ttk.Label(windLabelFrame,text="°")
-magnitudeLabel = ttk.Label(windLabelFrame, text="windMagnitude",padding=4)
+magnitudeLabel = ttk.Label(windLabelFrame, text="Wind Magnitude",padding=4)
 windMagnitudeTrace = windMagnitude.trace_add(mode="write",callback=lambda *args: LabelBold(magnitudeLabel,"Bold","windMagnitude"))
-magnitudeEntry = ttk.Entry(windLabelFrame,width=4,textvariable=windMagnitude,justify="right")
+magnitudeEntry = ttk.Entry(windLabelFrame,width="5",textvariable=windMagnitude,justify="right")
 magnitudeEntry.bind("<Return>",MagnitudeEntryValidate)
 magnitudeEntry.bind("<Tab>",MagnitudeEntryValidate)
 magnitudeEntry.bind("<Escape>",lambda *args: CancelSettingChange(StrVar=windMagnitude,label=magnitudeLabel,stringvar="windMagnitude"))
 magnitudeUnits = ttk.Label(windLabelFrame,text="m/s")
-dynamicLabel = ttk.Label(windLabelFrame, text="windDynamic",padding=4)
+dynamicLabel = ttk.Label(windLabelFrame, text="Dynamic Wind",padding=4)
 dynamicCheckBox = ttk.Checkbutton(windLabelFrame,variable=windDynamic,onvalue=1,offvalue=0,padding=4)
 windDynamicTrace = windDynamic.trace_add(mode="write", callback=(lambda *args: Json_Save(source=0,newEntry={"windDynamic" : windDynamic.get()})))
 pane1pane.add(pane13,weight=0)
@@ -2890,11 +3022,13 @@ clockOffsetLabel = ttk.Label(clockOffsetFrame,text="Splash Offset")
 clockOffsetSeparator = ttk.Separator(clockOffsetFrame,orient="vertical")
 clockOffsetEntry = ttk.Entry(clockOffsetFrame,textvariable=clockOffset,justify="left",width=30)
 clockOffsetEntry.bind("<Return>",ClockOffsetTime)
+clockSettingsFrame = ttk.Frame(clockNotesNotebook,height=clockHeight,width=clockWidth,padding=5,relief="groove")
 noteFrame = ttk.Frame(clockNotesNotebook,height=clockHeight,width=clockWidth,padding=5,relief="groove")
 noteFrame.grid_rowconfigure(0,weight=1)
 noteFrame.grid_columnconfigure(0,weight=1)
 noteText = Text(noteFrame,font=("Microsoft Tai Le",12),wrap="word")
 clockNotesNotebook.add(clockFrame,text="Clock",sticky="NESW",padding=1)
+clockNotesNotebook.add(clockSettingsFrame,text="Clock Settings",sticky="NESW",padding=1)
 clockNotesNotebook.add(noteFrame,text="Notes",sticky="NESW",padding=1)
 def DrawClockFace():
     
@@ -2970,26 +3104,10 @@ DrawClockFace()
 UpdateClock()
 
 def TerrainFolderCheck():
-    terrain_menu.insert_radiobutton
+    global terrainTrace
     for terrainFolder in terrainsFolders[0]: 
         terrain_menu.add_radiobutton(label=terrainFolder,variable=terrain,value=terrainFolder)
-    try:
-        with open(file=baseDir/"Terrains"/"terList.bin",mode="r") as file:
-            binary = ''.join(format(ord(c)^3, '08b') for c in str(terrainsFolders[0]))
-            string = ''.join(chr(int(char, 2)) for char in [binary[i:i+8] for i in range(0, len(binary), 8)])
-            file=file.read()
-            if string == file:
-                terrain.set(Json_Load(source=0)["terrain"])
-            else:
-                StatusMessageLog("Terrains folder edited, terrain needs to be reselected")
-    except:
-        try: StatusMessageLog("Terrains folder histroy was missing, terrain needs to be reselected")
-        except: None
-    with open(file=baseDir/"Terrains"/"terList.bin",mode="w") as file:
-        binary = ''.join(format(ord(c)^3, '08b') for c in str(terrainsFolders[0]))
-        string = ''.join(chr(int(char, 2)) for char in [binary[i:i+8] for i in range(0, len(binary), 8)])
-        file.write(string)
-    terrain.trace_add(mode="write",callback=TerrainChange)
+    terrainTrace = terrain.trace_add(mode="write",callback=TerrainChange)
 
 
 pane3pane = ttk.PanedWindow(pane3,orient="vertical")
@@ -3121,14 +3239,15 @@ system_menu.add_radiobutton(label="M6",variable=system,value="M6")
 system_menu.add_radiobutton(label="L16",variable=system,value="L16")
 system_menu.add_radiobutton(label="L119",variable=system,value="L119")
 system_menu.add_radiobutton(label="Sholef",variable=system,value="Sholef")
+idfpSystemFrame.bind("<Button-3>",lambda event : system_menu.post(event.x_root,event.y_root))
+idfpSystemOutput.bind("<Button-3>",lambda event : system_menu.post(event.x_root,event.y_root))
+idfpSystemLabel.bind("<Button-3>",lambda event : system_menu.post(event.x_root,event.y_root))
+idfpSystemSep.bind("<Button-3>",lambda event : system_menu.post(event.x_root,event.y_root))
 terrain_menu = Menu(menubar,tearoff=False)
 
 terrainValue = StringVar()
 terrain_menu.add_command(label="Install New Height Map (Keithenneu)",command=HeightMapFileDialog)
 terrain_menu.add_separator()
-
-
-    
 
 flipPaneSide = StringVar()
 fmEditSafetyToggle = StringVar()
@@ -3139,7 +3258,7 @@ settings_menu.add_cascade(label="UKSF Login",menu=login_menu)
 login_menu.add_command(label="Login",command=LoginWindow)
 login_menu.add_command(label="Logout",state="disabled",command=Logout)
 settings_menu.add_command(label="Flip window panes", command=FlipWindowPanes)
-settings_menu.add_checkbutton(label="Fire Mission edit safety",offvalue= 0,onvalue= 1, variable=fmEditSafetyToggle)
+settings_menu.add_checkbutton(label="Target edit safety",offvalue= 0,onvalue= 1, variable=fmEditSafetyToggle)
 fmEditSafetyToggle.set(1)
 fmEditSafetyToggle.trace_add(mode="write",callback=RequestEditFireMissionsFromSafety)
 
@@ -3209,8 +3328,12 @@ idfpHeightFrame.grid(column=1,row=2,sticky="NEW")
 idfpHeightEntry.grid(column=0,row=0,sticky="NEW")
 idfpHeightUnitLabel.grid(column=1,row=0,sticky="NW")
 idfpButtonFrame.grid(column=2,row=2,rowspan=3,sticky="NEW")
-idfpAddButton.grid(column=0,row=0,sticky="NEW")
-idfpRemoveButton.grid(column=0,row=1,sticky="NEW")
+idfpSystemFrame.grid(column=0,row=0,sticky="NEWS")
+idfpSystemLabel.grid(column=0,row=0,sticky="NWS")
+idfpSystemSep.grid(column=1,row=0,sticky="NS")
+idfpSystemOutput.grid(column=2,row=0,sticky="NSE")
+idfpAddButton.grid(column=0,row=1,sticky="NEW")
+idfpRemoveButton.grid(column=0,row=2,sticky="NEW")
 idfpSeparator.grid(column=0,columnspan=2,row=3,sticky="EW",pady=4)
 idfpControlFrame.grid(column=0,columnspan=2,row=4,sticky="NEW")
 idfpEditChargeLabel.grid(column=0,row=0,sticky="NE")
