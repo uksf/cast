@@ -1,5 +1,5 @@
 testCommandLine = ["--json","local"]
-version = "v0.0.3"
+version = "v0.0.4"
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -383,6 +383,11 @@ fireMissionPairedEffect = StringVar()
 
 clockOffset = StringVar()
 """Clock Offset used for fire mission splashes"""
+clockSize = StringVar()
+clockRimWidth = StringVar()
+clockFontSize = StringVar()
+clockHandSize = StringVar()
+clockSecHandSize = StringVar()
 
 terrainHeightMap = pd.DataFrame()
 """Terrain height map that contains heights of the map in metres for every metre square in a very large array"""
@@ -1491,6 +1496,93 @@ def PairedMissionChange(*args):
     else:
         fireMissionSelectionPairedEffectCreepingLabelframe.grid_remove()
 
+def LoadClockSettings():
+    try:common = Json_Load(source=0,localOverride=True)
+    except Exception as e: StatusMessageErrorDump(e,errorMessage="Failed to Load Common Json")
+    try: clockSize.set(common["clockSize"])
+    except: clockSize.set("400")
+    try: clockRimWidth.set(common["clockRimWidth"])
+    except: clockRimWidth.set("4")
+    try: clockFontSize.set(common["clockFontSize"])
+    except: clockFontSize.set("14")
+    try: clockHandSize.set(common["clockHandSize"])
+    except: clockHandSize.set("5")
+    try: clockSecHandSize.set(common["clockSecHandSize"])
+    except: clockSecHandSize.set("1")
+    ClockApplySettings()
+def ClockSettingsPopout():
+    clockNotesNotebook.select(clockFrame)
+    clockSettings = Toplevel(root)
+    clockSettings.attributes("-topmost",True)
+    clockSettings.title("Clock Settings")
+    clockSettings.geometry("150x200+200+500")
+    clockSettings.resizable(False,True)
+    clockSettings.iconbitmap(exeDir/"Functions"/"clock.ico")
+    clockSettingsWindow = clockSettings.winfo_toplevel()
+    clockSettingsWindow.anchor("nw")
+    clockSettingsWindow.grid_columnconfigure(0,weight=1)
+    clockSettingsWindow.grid_rowconfigure(0,weight=1)
+    clockSettingsFrame = ttk.Frame(clockSettingsWindow,padding=5,relief="groove")
+    clockSettingSizeLabel = ttk.Label(clockSettingsFrame,text="Size")
+    clockSettingRimWidthLabel = ttk.Label(clockSettingsFrame,text="Rim width")
+    clockSettingFontSizeLabel = ttk.Label(clockSettingsFrame,text="Font size")
+    clockSettingHandSizeLabel = ttk.Label(clockSettingsFrame,text="Hand Size")
+    clockSettingSecHandSizeLabel = ttk.Label(clockSettingsFrame,text="Sec. Hand Size")
+    clockSettingSeparator = ttk.Separator(clockSettingsFrame,orient="vertical")
+    clockSettingSizeFrame = ttk.Frame(clockSettingsFrame,padding=0)
+    clockSettingSizeFrame.grid_columnconfigure(0,minsize=10,weight=1)
+    clockSettingSizeFrame.grid_columnconfigure(1,minsize=5)
+    clockSettingSizeEntry = ttk.Entry(clockSettingSizeFrame,justify="left",textvariable=clockSize,width=5)
+    clockSettingSizeEntry.bind("<Return>",lambda event:ClockApplySettings())
+    clockSettingSizeUnitLabel = ttk.Label(clockSettingSizeFrame,text="Px")
+    clockSettingRimFrame = ttk.Frame(clockSettingsFrame,padding=0)
+    clockSettingRimFrame.grid_columnconfigure(0,minsize=10,weight=1)
+    clockSettingRimFrame.grid_columnconfigure(1,minsize=5)
+    clockSettingRimWidthEntry = ttk.Entry(clockSettingRimFrame,justify="left",textvariable=clockRimWidth,width=2)
+    clockSettingRimWidthEntry.bind("<Return>",lambda event:ClockApplySettings())
+    clockSettingRimUnitLabel = ttk.Label(clockSettingRimFrame,text="Px")
+    clockSettingFontFrame = ttk.Frame(clockSettingsFrame,padding=0)
+    clockSettingFontFrame.grid_columnconfigure(0,minsize=10,weight=1)
+    clockSettingFontFrame.grid_columnconfigure(1,minsize=5)
+    clockSettingFontSizeEntry = ttk.Entry(clockSettingFontFrame,justify="left",textvariable=clockFontSize,width=2)
+    clockSettingFontSizeEntry.bind("<Return>",lambda event:ClockApplySettings())
+    clockSettingFontUnitLabel = ttk.Label(clockSettingFontFrame,text="Px")
+    clockSettingHandSizeFrame = ttk.Frame(clockSettingsFrame,padding=0)
+    clockSettingHandSizeFrame.grid_columnconfigure(0,minsize=10,weight=1)
+    clockSettingHandSizeFrame.grid_columnconfigure(1,minsize=5)
+    clockSettingHandSizeEntry = ttk.Entry(clockSettingHandSizeFrame,justify="left",textvariable=clockHandSize,width=2)
+    clockSettingHandSizeEntry.bind("<Return>",lambda event:ClockApplySettings())
+    clockSettingHandSizeUnitLabel = ttk.Label(clockSettingHandSizeFrame,text="Px")
+    clockSettingSecHandSizeFrame = ttk.Frame(clockSettingsFrame,padding=0)
+    clockSettingSecHandSizeFrame.grid_columnconfigure(0,minsize=10,weight=1)
+    clockSettingSecHandSizeFrame.grid_columnconfigure(1,minsize=5)
+    clockSettingSecHandSizeEntry = ttk.Entry(clockSettingSecHandSizeFrame,justify="left",textvariable=clockSecHandSize,width=2)
+    clockSettingSecHandSizeEntry.bind("<Return>",lambda event:ClockApplySettings())
+    clockSettingSecHandSizeUnitLabel = ttk.Label(clockSettingSecHandSizeFrame,text="Px")
+    clockSettingApplyButton = ttk.Button(clockSettingsFrame,text="Apply",command=ClockApplySettings)
+    clockSettingsFrame.grid(column="0",row="0",sticky="NESW")
+    clockSettingSizeLabel.grid(column="0",row="0",sticky="NE")
+    clockSettingRimWidthLabel.grid(column="0",row="1",sticky="NE")
+    clockSettingFontSizeLabel.grid(column="0",row="2",sticky="NE")
+    clockSettingHandSizeLabel.grid(column="0",row="3",sticky="NE")
+    clockSettingSecHandSizeLabel.grid(column="0",row="4",sticky="NE")
+    clockSettingSeparator.grid(column="1",row="0",rowspan="5",sticky="NS")
+    clockSettingSizeFrame.grid(column="2",row="0",sticky="NW",pady=4)
+    clockSettingSizeEntry.grid(column="0",row="0",sticky="NW")
+    clockSettingSizeUnitLabel.grid(column="1",row="0",sticky="SW")
+    clockSettingRimFrame.grid(column="2",row="1",sticky="NW",pady=4)
+    clockSettingRimWidthEntry.grid(column="0",row="0",sticky="NW")
+    clockSettingRimUnitLabel.grid(column="1",row="0",sticky="SW")
+    clockSettingFontFrame.grid(column="2",row="2",sticky="NW",pady=4)
+    clockSettingFontSizeEntry.grid(column="0",row="0",sticky="NW")
+    clockSettingFontUnitLabel.grid(column="1",row="0",sticky="SW")
+    clockSettingHandSizeFrame.grid(column="2",row="3",sticky="NW",pady=4)
+    clockSettingHandSizeEntry.grid(column="0",row="0",sticky="NW")
+    clockSettingHandSizeUnitLabel.grid(column="1",row="0",sticky="SW")
+    clockSettingSecHandSizeFrame.grid(column="2",row="4",sticky="NW",pady=4)
+    clockSettingSecHandSizeEntry.grid(column="0",row="0",sticky="NW")
+    clockSettingSecHandSizeUnitLabel.grid(column="1",row="0",sticky="SW")
+    clockSettingApplyButton.grid(column="0",columnspan="3",row="5",sticky="NESW",pady="4")
 
 def UpdateSync(setting = None):
     """
@@ -2365,7 +2457,6 @@ def Calculate():
 
 
 def StandardFireMissionOutput(FireMissions: dict,idfp: str,textWidget: Text):
-    output = ""
     def Standard(details):
         try: 
             if details["Notes"]!= "":
@@ -2997,7 +3088,7 @@ def ClockOffsetTime(event):
                 fireMissions = Json_Load(source=4)
                 time = fireMissions[idfp][offset]["TOF"]
                 clockHandOffset = float(time)
-                clockOffset.set(time)
+                clockOffset.set(np.round(time*10)/10)
             except: clockHandOffset = 0
     else:
         clockHandOffset = 0.0
@@ -3010,7 +3101,7 @@ pane23.grid_rowconfigure(0,weight=1)
 pane23.grid_columnconfigure(0,weight=1)
 clockNotesNotebook = ttk.Notebook(pane23,width=420,height=450)
 clockFrame = ttk.Frame(clockNotesNotebook,height=clockHeight,width=clockWidth,padding=5,relief="groove")
-clockFrame.grid_rowconfigure((0,1),weight=1)
+#clockFrame.grid_rowconfigure((0,1),weight=1)
 clockFrame.grid_columnconfigure(0,weight=1)
 clockCanvas = Canvas(clockFrame,width=clockWidth,height=clockHeight,bg="white")
 clockOffsetFrame = ttk.Frame(clockFrame,padding=4)
@@ -3020,18 +3111,97 @@ clockOffsetFrame.grid_columnconfigure(2,weight=1,minsize=10)
 clockOffsetFrame.grid_rowconfigure(0,weight=1)
 clockOffsetLabel = ttk.Label(clockOffsetFrame,text="Splash Offset")
 clockOffsetSeparator = ttk.Separator(clockOffsetFrame,orient="vertical")
-clockOffsetEntry = ttk.Entry(clockOffsetFrame,textvariable=clockOffset,justify="left",width=30)
+clockOffsetEntry = ttk.Entry(clockOffsetFrame,textvariable=clockOffset,justify="left",width=10)
 clockOffsetEntry.bind("<Return>",ClockOffsetTime)
+def ClockApplySettings():
+    try: Json_Save(source=0,newEntry={"clockSize":clockSize.get(),"clockRimWidth":clockRimWidth.get(),"clockFontSize":clockFontSize.get(),"clockHandSize":clockHandSize.get(),"clockSecHandSize":clockSecHandSize.get()},localOverride=True)
+    except Exception as e: StatusMessageErrorDump(e,errorMessage="Failed to save clock settings to JSON")
+    try:
+        global clockWidth
+        global clockHeight
+        global clockRadius
+        global clockRim
+        global clockCenterX
+        global clockCenterY
+        global clockFont
+        global clockHand
+        global secClockHand
+        outerBounds = int(clockSize.get())*1.05
+        clockWidth,clockHeight,clockRadius,clockRim = outerBounds,outerBounds,int(np.round(float(clockSize.get())/2)),int(clockRimWidth.get())
+        clockCenterX = clockWidth//2
+        clockCenterY = clockHeight//2
+        clockFont = int(np.round(float(clockFontSize.get())))
+        clockHand = int(np.round(float(clockHandSize.get())))
+        secClockHand = int(np.round(float(clockSecHandSize.get())))
+    except Exception as e: StatusMessageErrorDump(e,errorMessage="Failed to set clock settings")
+    clockCanvas.delete("all")
+    DrawClockFace()
+    
 clockSettingsFrame = ttk.Frame(clockNotesNotebook,height=clockHeight,width=clockWidth,padding=5,relief="groove")
+clockSettingsFrame.grid_columnconfigure(0,minsize=40)
+clockSettingsFrame.grid_columnconfigure(1,minsize=9)
+clockSettingsFrame.grid_columnconfigure(2,minsize=40,weight=1)
+clockSettingsFrame.grid_columnconfigure(3,minsize=3)
+clockSettingSizeLabel = ttk.Label(clockSettingsFrame,text="Size")
+clockSettingRimWidthLabel = ttk.Label(clockSettingsFrame,text="Rim width")
+clockSettingFontSizeLabel = ttk.Label(clockSettingsFrame,text="Font size")
+clockSettingHandSizeLabel = ttk.Label(clockSettingsFrame,text="Hand Size")
+clockSettingSecHandSizeLabel = ttk.Label(clockSettingsFrame,text="Sec. Hand Size")
+clockSettingSeparator = ttk.Separator(clockSettingsFrame,orient="vertical")
+clockSettingSizeFrame = ttk.Frame(clockSettingsFrame,padding=0)
+clockSettingSizeFrame.grid_columnconfigure(0,minsize=10,weight=1)
+clockSettingSizeFrame.grid_columnconfigure(1,minsize=5)
+clockSettingSizeEntry = ttk.Entry(clockSettingSizeFrame,justify="left",textvariable=clockSize,width=5)
+clockSettingSizeEntry.bind("<Return>",lambda event:ClockApplySettings())
+clockSettingSizeUnitLabel = ttk.Label(clockSettingSizeFrame,text="Px")
+clockSettingRimFrame = ttk.Frame(clockSettingsFrame,padding=0)
+clockSettingRimFrame.grid_columnconfigure(0,minsize=10,weight=1)
+clockSettingRimFrame.grid_columnconfigure(1,minsize=5)
+clockSettingRimWidthEntry = ttk.Entry(clockSettingRimFrame,justify="left",textvariable=clockRimWidth,width=2)
+clockSettingRimWidthEntry.bind("<Return>",lambda event:ClockApplySettings())
+clockSettingRimUnitLabel = ttk.Label(clockSettingRimFrame,text="Px")
+clockSettingFontFrame = ttk.Frame(clockSettingsFrame,padding=0)
+clockSettingFontFrame.grid_columnconfigure(0,minsize=10,weight=1)
+clockSettingFontFrame.grid_columnconfigure(1,minsize=5)
+clockSettingFontSizeEntry = ttk.Entry(clockSettingFontFrame,justify="left",textvariable=clockFontSize,width=2)
+clockSettingFontSizeEntry.bind("<Return>",lambda event:ClockApplySettings())
+clockSettingFontUnitLabel = ttk.Label(clockSettingFontFrame,text="Px")
+clockSettingHandSizeFrame = ttk.Frame(clockSettingsFrame,padding=0)
+clockSettingHandSizeFrame.grid_columnconfigure(0,minsize=10,weight=1)
+clockSettingHandSizeFrame.grid_columnconfigure(1,minsize=5)
+clockSettingHandSizeEntry = ttk.Entry(clockSettingHandSizeFrame,justify="left",textvariable=clockHandSize,width=2)
+clockSettingHandSizeEntry.bind("<Return>",lambda event:ClockApplySettings())
+clockSettingHandSizeUnitLabel = ttk.Label(clockSettingHandSizeFrame,text="Px")
+clockSettingSecHandSizeFrame = ttk.Frame(clockSettingsFrame,padding=0)
+clockSettingSecHandSizeFrame.grid_columnconfigure(0,minsize=10,weight=1)
+clockSettingSecHandSizeFrame.grid_columnconfigure(1,minsize=5)
+clockSettingSecHandSizeEntry = ttk.Entry(clockSettingSecHandSizeFrame,justify="left",textvariable=clockSecHandSize,width=2)
+clockSettingSecHandSizeEntry.bind("<Return>",lambda event:ClockApplySettings())
+clockSettingSecHandSizeUnitLabel = ttk.Label(clockSettingSecHandSizeFrame,text="Px")
+clockSettingApplyButton = ttk.Button(clockSettingsFrame,text="Apply",command=ClockApplySettings)
+clockSettingPopoutButton = ttk.Button(clockSettingsFrame,text="P\no\np\no\nu\nt",width=3,command=ClockSettingsPopout)
 noteFrame = ttk.Frame(clockNotesNotebook,height=clockHeight,width=clockWidth,padding=5,relief="groove")
 noteFrame.grid_rowconfigure(0,weight=1)
 noteFrame.grid_columnconfigure(0,weight=1)
 noteText = Text(noteFrame,font=("Microsoft Tai Le",12),wrap="word")
+def SaveNotes(): Json_Save(source=0,newEntry={"notes": noteText.get("1.0", END).strip()},localOverride=True)
+def LoadNotes():
+    try: noteText.insert(END,Json_Load(source=0,localOverride=True)["notes"])
+    except: noteText.insert(END,"Pressing 'return' in this text box will save the contents")
+noteText.bind("<Return>",lambda event:SaveNotes())
 clockNotesNotebook.add(clockFrame,text="Clock",sticky="NESW",padding=1)
 clockNotesNotebook.add(clockSettingsFrame,text="Clock Settings",sticky="NESW",padding=1)
 clockNotesNotebook.add(noteFrame,text="Notes",sticky="NESW",padding=1)
+clockFont = 14
+clockTextSize = 0.9
+clockHand = 5
+secClockHand = 1
 def DrawClockFace():
-    
+    clockCanvas["width"]=clockWidth
+    clockCanvas["height"]=clockHeight
+    if clockWidth>50:
+        clockOffsetEntry["width"] = int(np.round(clockWidth/20))
+    else: clockOffsetEntry["width"] = 3
     clockCanvas.create_oval(clockCenterX-clockRadius,clockCenterY-clockRadius,clockCenterX+clockRadius,clockCenterY+clockRadius,width=clockRim)
     for i in range(12):
         angle = np.radians(i*30)
@@ -3040,17 +3210,17 @@ def DrawClockFace():
         if i in [3,6,9,0]:
             innerRadius = clockRadius * 0.65
             outerRadius = clockRadius * 0.8
-            textRadius = clockRadius * 0.9
-            width = 5
+            HandSize = clockRadius * clockTextSize
+            width = clockRim
             numeral = {0: "12", 3: "3", 6: "6", 9: "9"}[i]
-            xText = clockCenterX + textRadius * sinA
-            yText = clockCenterY - textRadius * cosA
-            clockCanvas.create_text(xText,yText,text=numeral,font=("Microsoft Tai Le",14,"bold"))
+            xText = clockCenterX + HandSize * sinA
+            yText = clockCenterY - HandSize * cosA
+            clockCanvas.create_text(xText,yText,text=numeral,font=("Microsoft Tai Le",clockFont,"bold"))
         else:
             innerRadius = clockRadius * 0.75
             outerRadius = clockRadius * 0.95
-            textRadius = clockRadius * 0.8
-            width = 3
+            HandSize = clockRadius * (clockTextSize-0.1)
+            width = clockRim/2
         xOuter = clockCenterX + outerRadius * sinA
         yOuter = clockCenterY - outerRadius * cosA
         xInner = clockCenterX + innerRadius * sinA
@@ -3069,7 +3239,7 @@ def DrawClockFace():
             xInner = clockCenterX + inner * sinA
             yInner = clockCenterY - inner * cosA
             clockCanvas.create_line(xInner,yInner,xOuter,yOuter,width=1)
-    clockCanvas.create_text(clockCenterX,clockCenterY+clockRadius/2,text="ZULU",fill="lightgrey",font=("Microsoft Tai Le",14,"bold"))
+    clockCanvas.create_text(clockCenterX,clockCenterY+clockRadius/2,text="ZULU",fill="lightgrey",font=("Microsoft Tai Le",clockFont,"bold"))
 def UpdateClock():
     clockCanvas.delete("hand")
     now = datetime.now(timezone.utc)
@@ -3086,16 +3256,26 @@ def UpdateClock():
     if clockHandOffset!= 0.0:
         xOffSec = clockCenterX + clockRadius * 0.9 * np.sin(offSecAngle)
         yOffSec = clockCenterY - clockRadius * 0.9 * np.cos(offSecAngle)
-        clockCanvas.create_line(clockCenterX,clockCenterY, xOffSec,yOffSec,fill="red",width=1,tag="hand")
+        clockCanvas.create_line(clockCenterX,clockCenterY, xOffSec,yOffSec,fill="red",width=secClockHand,tag="hand")
+        if clockHandOffset < 60.0: clockCanvas.create_arc(int(clockCenterX-clockRadius/2),int(clockCenterY-clockRadius/2),int(clockCenterX+clockRadius/2),int(clockCenterY+clockRadius/2),start=-np.rad2deg(secAngle-np.pi/2),extent=clockHandOffset*6,style=PIESLICE,fill="#FFAAAA",outline="#FF0000",tag="hand",width=secClockHand)
+        elif clockHandOffset < 120:
+            clockCanvas.create_arc(int(clockCenterX-clockRadius/1.5),int(clockCenterY-clockRadius/1.5),int(clockCenterX+clockRadius/1.5),int(clockCenterY+clockRadius/1.5),start=-np.rad2deg(secAngle-np.pi/2),extent=clockHandOffset*6,style=PIESLICE,fill="#FFAAAA",outline="#FF0000",tag="hand",width=secClockHand)
+            clockCanvas.create_oval(int(clockCenterX-clockRadius/2),int(clockCenterY-clockRadius/2),int(clockCenterX+clockRadius/2),int(clockCenterY+clockRadius/2),fill="#FF7777",outline="#FF0000",tag="hand",width=secClockHand)
     xSec = clockCenterX + clockRadius * 0.9 * np.sin(secAngle)
     ySec = clockCenterY - clockRadius * 0.9 * np.cos(secAngle)
-    clockCanvas.create_line(clockCenterX,clockCenterY, xSec,ySec,fill="blue",width=1,tag="hand")
+    xSecCircle = clockCenterX + (clockRadius * 0.9+5) * np.sin(secAngle)
+    ySecCircle = clockCenterY - (clockRadius * 0.9+5) * np.cos(secAngle)
+    clockCanvas.create_line(clockCenterX,clockCenterY, xSec,ySec,fill="blue",width=secClockHand,tag="hand")
+    clockCanvas.create_oval(xSecCircle-5,ySecCircle-5,xSecCircle+5,ySecCircle+5,width=secClockHand,outline="blue",tag="hand")
     xMin = clockCenterX + clockRadius * 0.75 * np.sin(minAngle)
     YMin = clockCenterY - clockRadius * 0.75 * np.cos(minAngle)
-    clockCanvas.create_line(clockCenterX,clockCenterY, xMin,YMin,fill="black",width=3,tag="hand")
+    clockCanvas.create_line(clockCenterX,clockCenterY, xMin,YMin,fill="black",width=int(np.round(clockHand/2)),tag="hand")
+    clockCanvas.create_oval(xMin-int(np.round(clockHand/4)),YMin-int(np.round(clockHand/4)),xMin+int(np.round(clockHand/4)),YMin+int(np.round(clockHand/4)),fill="black",outline="black",tag="hand")
     xHour = clockCenterX + clockRadius * 0.5 * np.sin(hourAngle)
-    YHour = clockCenterY - clockRadius * 0.5 * np.cos(hourAngle)
-    clockCanvas.create_line(clockCenterX,clockCenterY, xHour,YHour,fill="black",width=7,tag="hand")
+    yHour = clockCenterY - clockRadius * 0.5 * np.cos(hourAngle)
+    clockCanvas.create_line(clockCenterX,clockCenterY, xHour,yHour,fill="black",width=int(np.round(clockHand)),tag="hand")
+    clockCanvas.create_oval(clockCenterX-int(np.round(clockHand)/2),clockCenterY-int(np.round(clockHand)/2),clockCenterX+int(np.round(clockHand)/2),clockCenterY+int(np.round(clockHand)/2),fill="black",outline="black",tag="hand")
+    clockCanvas.create_oval(xHour-int(np.round(clockHand)/2),yHour-int(np.round(clockHand)/2),xHour+int(np.round(clockHand)/2),yHour+int(np.round(clockHand)/2),fill="black",outline="black",tag="hand")
     delay = int(50 - (microsecond / 1000) % 50)
     if delay == 0: delay = 50
     root.after(delay, UpdateClock)
@@ -3458,7 +3638,31 @@ clockOffsetFrame.grid(column="0",row="1",sticky="NESW")
 clockOffsetLabel.grid(column="0",row="0",sticky="NES")
 clockOffsetSeparator.grid(column="1",row="0",sticky="NS")
 clockOffsetEntry.grid(column="2",row="0",sticky="NSW")
-#noteFrame.grid(column="0",row="0",sticky="NESW")
+#clockSettingsFrame.grid(column="0",row="0",sticky="NESW")
+clockSettingSizeLabel.grid(column="0",row="0",sticky="NE")
+clockSettingRimWidthLabel.grid(column="0",row="1",sticky="NE")
+clockSettingFontSizeLabel.grid(column="0",row="2",sticky="NE")
+clockSettingHandSizeLabel.grid(column="0",row="3",sticky="NE")
+clockSettingSecHandSizeLabel.grid(column="0",row="4",sticky="NE")
+clockSettingSeparator.grid(column="1",row="0",rowspan="5",sticky="NS")
+clockSettingSizeFrame.grid(column="2",row="0",sticky="NW",pady=4)
+clockSettingSizeEntry.grid(column="0",row="0",sticky="NW")
+clockSettingSizeUnitLabel.grid(column="1",row="0",sticky="SW")
+clockSettingPopoutButton.grid(column="3",row="0",rowspan=6,sticky="NS")
+clockSettingRimFrame.grid(column="2",row="1",sticky="NW",pady=4)
+clockSettingRimWidthEntry.grid(column="0",row="0",sticky="NW")
+clockSettingRimUnitLabel.grid(column="1",row="0",sticky="SW")
+clockSettingFontFrame.grid(column="2",row="2",sticky="NW",pady=4)
+clockSettingFontSizeEntry.grid(column="0",row="0",sticky="NW")
+clockSettingFontUnitLabel.grid(column="1",row="0",sticky="SW")
+clockSettingHandSizeFrame.grid(column="2",row="3",sticky="NW",pady=4)
+clockSettingHandSizeEntry.grid(column="0",row="0",sticky="NW")
+clockSettingHandSizeUnitLabel.grid(column="1",row="0",sticky="SW")
+clockSettingSecHandSizeFrame.grid(column="2",row="4",sticky="NW",pady=4)
+clockSettingSecHandSizeEntry.grid(column="0",row="0",sticky="NW")
+clockSettingSecHandSizeUnitLabel.grid(column="1",row="0",sticky="SW")
+clockSettingApplyButton.grid(column="0",columnspan="3",row="5",sticky="NESW",pady="4")
+# noteFrame.grid(column="0",row="0",sticky="NESW")
 noteText.grid(column="0",row="0",sticky="NESW")
 
 pane3pane.grid(column="0",row="0",sticky="NEWS")
@@ -3551,6 +3755,8 @@ def StartUp(login = False,terrains = True):
         IDFPListInitialise()
         if terrains == True:
             terrain.set(Json_Load(source=0,localOverride=True)["terrain"])
+        LoadClockSettings()
+        LoadNotes()
         UpdateSync()
         CheckUpdateQueue()
     if login ==True or jsonType == 0:
