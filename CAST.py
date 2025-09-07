@@ -1,5 +1,5 @@
 testCommandLine = ["--json","local"]
-version = "v0.0.4"
+version = "v0.0.4 Alpha"
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -9,18 +9,22 @@ from pathlib import Path
 import numpy as np
 import re
 import requests
+from PIL import Image,ImageTk
+from io import BytesIO
 import json
 import os
 import sys
+import traceback
 import pandas as pd
 import threading
 import queue
 import pyperclip
 from collections import Counter
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg,NavigationToolbar2Tk
-import matplotlib.patches as patches
+# from pydub import AudioSegment
+# from pydub.playback import play
 from Functions import ArtilleryFunctions as AF
+from Functions import MapFunctions as Map
+import time
 
 jsonType = 0
 """The mode that the program operates in
@@ -57,6 +61,7 @@ baseDir = get_base_dir()
 currentFile = Path(__file__).resolve()
 exeDir = currentFile.parent
 appdata_local = Path(os.getenv('LOCALAPPDATA'))
+print(appdata_local)
 os.makedirs(appdata_local/"UKSF"/"CAST",exist_ok=True)
 user = "Unknown User"
 update_queue = queue.Queue()
@@ -100,12 +105,41 @@ def Json_Load(source : int,localOverride = False) -> dict | str:
                 with open(exeDir/"Functions"/"ArtilleryConfigs.json",mode="r") as file:
                     return json.load(file)
         except Exception as e:
-            if source == 0: source = "Common parameters"
-            elif source == 1: source = "IDFP position data"
-            elif source == 2: source = "Friendly position data"
-            elif source == 3: source = "Target position data"
-            elif source == 4: source = "Fire mission data"
+            if source == 0:
+                source = "Common parameters"
+                try:
+                    with open(appdata_local/"UKSF"/"CAST"/"common.json",mode="w") as f:
+                        json.dump({},f,indent=4)
+                except: None
+            elif source == 1:
+                source = "IDFP position data"
+                try:
+                    with open(appdata_local/"UKSF"/"CAST"/"IDFP.json","w") as f:
+                        json.dump({},f,indent=4)
+                except: None
+            elif source == 2:
+                source = "Friendly position data"
+                try:
+                    with open(appdata_local/"UKSF"/"CAST"/"Friendly.json",mode="w") as f:
+                        json.dump({},f,indent=4)
+                except: None
+            elif source == 3:
+                source = "Target position data"
+                try:
+                    with open(appdata_local/"UKSF"/"CAST"/"Targets.json",mode="w") as f:
+                        json.dump({},f,indent=4)
+                except: None
+            elif source == 4:
+                source = "Fire mission data"
+                try:
+                    with open(appdata_local/"UKSF"/"CAST"/"FireMissions.json",mode="w") as f:
+                        json.dump({},f,indent=4)
+                except: None
             elif source == 5:
+                try:
+                    with open(appdata_local/"UKSF"/"CAST"/"Message_Log.json",mode="w") as f:
+                        json.dump({"message":""},f,indent=4)
+                except: None
                 StatusMessageErrorDump(e, errorMessage="Failed to load Message log, returning nothing")
                 return {}
             else: source = "Artillery Configurations"
@@ -160,9 +194,13 @@ def Json_Save(source : int,newEntry : dict | str, append = True,localOverride = 
     data = {}
     if append:
         if source !=5:
-            data = (Json_Load(source,localOverride) | newEntry)
+            try: data = (Json_Load(source,localOverride) | newEntry)
+            except TypeError: None
         else:
-            message = Json_Load(5,localOverride) + str(newEntry)
+            try:
+                message = Json_Load(5,localOverride) + str(newEntry)
+            except TypeError:
+                message = {"message":""}
             data["message"] = message
     else:
         if source == 5: data["message"] = str(newEntry)
@@ -278,13 +316,6 @@ with open((baseDir/"tempstipple.xbm"),"w") as f:
 
 root = Tk()
 root.iconbitmap(bitmap=str(exeDir/"Functions"/"uksf.ico"))
-#Name Ideas :
-#AMISS - Artillery Mission Integration & Support System
-#NOMAD – Networked Ordnance Management and Deployment
-#LANCE – Long-range Artillery Networked Coordination Engine
-#ARTOS – Artillery Targeting operations System
-#TIFOR - Operation Targeting and Indirect fire Operation relay
-#CAST - Coordinated Artillery Support Tool
 root.title("Coordinated Artillery Support Tool")
 root.state("zoomed")
 #ttk.Style().theme_use('classic')
@@ -616,7 +647,6 @@ def StatusMessageLog(message = "",privateMessage = None):
     else:
         statusMessageLabel.config(text=privateMessage)
     if message != "":
-        oldMessageLog = Json_Load(source=5)
         Json_Save(source=5,newEntry=(str(datetime.now(timezone.utc))[:-11] + "\t" + "|" + "\t" + user + "\t" + "|" + "\t" + message+"\n"),append=True)
         if messageLogOpen == 1:
             messageLogText["state"] = "normal"
@@ -629,9 +659,14 @@ def StatusMessageErrorDump(e: Exception, errorMessage = ""):
     if errorMessage != "":
         StatusMessageLog(message=errorMessage)
     try:
-        excType, excValue, excTraceback = sys.exc_info()
-        if excTraceback:
-            StatusMessageLog(message=f"Error details:\n\tType: {str(excType)}\n\tError: {str(excValue)}\n\tdetails:\n\t\tfile: {excTraceback.tb_frame.f_code.co_filename.split('\\')[-1]}\n\t\tfunction: {excTraceback.tb_frame.f_code.co_name}\n\t\tline: {excTraceback.tb_lineno}",privateMessage="Empty")
+        #excType, excValue, excTraceback = sys.exc_info()
+        if e:
+            fullTrace = traceback.extract_tb(e.__traceback__)
+            fullTraceStr = ""
+            for i,frame in enumerate(fullTrace):
+                filename = frame.filename.split('\\')[-1]
+                fullTraceStr+=f"\n\t\t{filename} | {frame.name} | {str(frame.lineno)}"
+            StatusMessageLog(message=f"Error details:\n\tVersion: {version}\n\tType: {type(e).__name__}\n\tError: {e}\n\tError Line: {fullTrace[-1].lineno} : {fullTrace[-1].line}\n\tFull stack:{fullTraceStr}",privateMessage="Empty")
         else: StatusMessageLog(message=f"Failed error message")
     except: StatusMessageLog(message=f"Failed error message")
 
@@ -663,6 +698,8 @@ def LoginWindow(startup=False):
                     loginMessage["text"] = "Logged in as " + loginAcount.json()["displayName"]
                     with open(file=appdata_local/"UKSF"/"CAST"/"auth.json",mode="w") as file:
                         json.dump(localStorageToken.json(),file,indent=4)
+                    global jsonType
+                    jsonType = 1
                     if startup == True:
                         StartUp(login=True)
                     login_menu.entryconfigure("Login",state=DISABLED)
@@ -747,6 +784,7 @@ def Logout():
         file.write("")
         StatusMessageLog("Logged out")
         user = "Logged Out User"
+    global jsonType
     root.destroy()
     
 def IDFCalculatorClosed():
@@ -763,7 +801,7 @@ def UpdateStringVar(StrVar: StringVar, value,trace=None,entryLabel=None):
         StrVar.set(value)
     except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to set string variable {StrVar} to {value}")
 
-def NewHeightMapFile(filePath: str,terrainName: str,compression = True):
+def NewHeightMapFile(filePath: str,terrainName: str,compression = False):
     """Add a new Height map file using https://github.com/Keithenneu/Beowulf.ArmaTerrainExport Information on how to install in the instructions doc"""
     targetListCalculate["state"] = "disabled"
     statusProgressBar["value"],statusProgressBar["mode"] = 0,"determinate"
@@ -791,7 +829,7 @@ def NewHeightMapFile(filePath: str,terrainName: str,compression = True):
     rowList = []
     heights = ""
     os.makedirs(baseDir/"Terrains"/terrainName,exist_ok=True)
-    StatusMessageLog("Beginning "+ terrainName.replace("_"," ")+ " height map format")
+    StatusMessageLog("Beginning "+ terrainName+ " height map format")
     with open(file=filePath) as file:
         with open(file=baseDir/"Terrains"/terrainName/(terrainName+".gzcsv"),mode="w") as outputfile:
             outputfile.write("")
@@ -799,7 +837,9 @@ def NewHeightMapFile(filePath: str,terrainName: str,compression = True):
             line = line.replace("\n","").replace("\r","").split(sep=" ") # CHECK TO SEE IF THE LAST HEIGHTS ARE ADDED
             if xrow != int(line[0]) and line != start:
                 heights += str(rowList).replace("[","").replace("]","") + "\n"
+                print(len(heights),line[0]!= end[0])
                 if len(heights) > 175000000 and line[0]!= end[0]:
+                    print("test")
                     with open(file=baseDir/"Terrains"/terrainName/str(terrainName+".gzcsv"),mode="a") as outputfile:
                         outputfile.write(str(heights))
                     heights = ""
@@ -813,14 +853,16 @@ def NewHeightMapFile(filePath: str,terrainName: str,compression = True):
                 rowList.append(0)
             else:
                 rowList.append(round(float(line[2]),ndigits=1))
-    StatusMessageLog("Completed "+ terrainName.replace("_"," ")+ " height map format")
+        with open(file=baseDir/"Terrains"/terrainName/str(terrainName+".gzcsv"),mode="a") as outputfile:
+            outputfile.write(str(heights))
+    StatusMessageLog("Completed "+ terrainName + " height map format")
     statusMessageLabel.update()
     if compression:
-        StatusMessageLog("Beginning compression of "+ terrainName.replace("_"," ")+ " height map. Please wait several minutes")
+        StatusMessageLog("Beginning compression of "+ terrainName+ " height map. Please wait several minutes")
         statusMessageLabel.update()
         data = pd.read_csv(baseDir/"Terrains"/terrainName/str(terrainName+".gzcsv"),header=None)
         data.to_csv(baseDir/"Terrains"/terrainName/str(terrainName+".gzcsv"),compression="gzip")
-        StatusMessageLog("Completed compression of "+ terrainName.replace("_"," ")+ " height map")
+        StatusMessageLog("Completed compression of "+ terrainName+ " height map")
     targetListCalculate["state"] = "normal"
     statusProgressBar["value"] = 0
     statusProgressBar.update()
@@ -846,7 +888,7 @@ def HeightMapFileDialog():
             if mapName.get() != "":
                 filePath = filedialog.askopenfilename(initialdir="C:/arma3/terrain",title=f"Select corresponding {mapName.get()} terrain height map",filetypes=(("Text files","*txt"),("All files","*.*")))
                 if filePath:
-                    NewHeightMapFile(filePath,terrainName=mapName.get().replace(" ","_"))
+                    NewHeightMapFile(filePath,terrainName=mapName.get())
     HeightMapTopLevel = Toplevel(root)
     HeightMapTopLevel.grab_set()
     HeightMapTopLevel.attributes("-topmost",True)
@@ -875,9 +917,139 @@ def HeightMapFileDialog():
     HeightMapEntry.bind("<Return>",HeightMapAccept)
     HeightMapTopLevel.protocol("WM_DELETE_WINDOW",HeightMapTolLevelClosed)
 
+
+def TerrainImageFileDialog():
+    terrainImageTerrainName = StringVar()
+    terrainImageTerrainURL = StringVar()
+    terrainImageResolution = StringVar()
+    def Download():
+        try:
+            if (terrainImageTerrainName.get()!= "" and terrainImageResolution.get()!=""):
+                terrainImageTopLevel.attributes("-topmost",False)
+                terrainImageTopLevel.grab_release()
+                terrainImagePreviewTopLevel = Toplevel(root)
+                terrainImagePreviewTopLevel.grab_set()
+                terrainImagePreviewTopLevel.title("Map Download and Stitch")
+                terrainImagePreviewTopLevel.geometry("746x323+0+0")
+                terrainImagePreviewTopLevel.iconbitmap(exeDir/"Functions"/"uksf.ico")
+                terrainImagePreviewWindow = terrainImagePreviewTopLevel.winfo_toplevel()
+                terrainImagePreviewWindow.anchor("nw")
+                terrainImagePreviewWindow.grid_columnconfigure(0,weight=1)
+                terrainImagePreviewWindow.grid_rowconfigure(0,weight=1)
+                terrainImagePreviewFrame = ttk.Frame(terrainImagePreviewWindow)
+                terrainImagePreviewMap = ttk.Label(terrainImagePreviewFrame)
+                terrainImagePreviewStitch = ttk.Label(terrainImagePreviewFrame)
+                terrainImagePreviewFrame.grid(column="0",row="0",sticky="NESW")
+                terrainImagePreviewMap.grid(column="0",row="0",sticky="NW")
+                terrainImagePreviewStitch.grid(column="1",row="0",sticky="NW")
+                newImage = NewTerrainImage(terrainImageTerrainURL.get(),terrainImageResolution.get(),terrainImagePreviewMap,terrainImagePreviewStitch,terrainImagePreviewTopLevel)
+                newImage.save(baseDir/"Terrains"/terrainImageTerrainName.get()/(terrainImageTerrainName.get()+".png"))
+                StatusMessageLog(message=f"Downloaded {terrainImageTerrainName.get()} terrain map")
+                terrainImagePreviewTopLevel.grab_release()
+                root.bell()
+                terrainImagePreviewTopLevel.destroy()
+                terrainImageTopLevel.destroy()
+        except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Issue when Downloading terrain map for {terrainImageTerrainName.get()}")
+    terrainImageTopLevel = Toplevel(root)
+    terrainImageTopLevel.grab_set()
+    terrainImageTopLevel.attributes("-topmost",True)
+    terrainImageTopLevel.title("Terrain image creation")
+    terrainImageTopLevel.geometry("400x260")
+    terrainImageTopLevel.resizable(width=True,height=False)
+    terrainImageTopLevel.iconbitmap(exeDir/"Functions"/"uksf.ico")
+    terrainImageWindow = terrainImageTopLevel.winfo_toplevel()
+    terrainImageWindow.minsize(400,260)
+    terrainImageWindow.anchor("nw")
+    terrainImageWindow.grid_columnconfigure(0,weight=1)
+    terrainImageWindow.grid_rowconfigure(0,weight=1)
+    terrainImageFrame = ttk.Frame(terrainImageWindow,padding=10)
+    terrainImageFrame.grid_columnconfigure(0,minsize=35)
+    terrainImageFrame.grid_columnconfigure(1,minsize=5)
+    terrainImageFrame.grid_columnconfigure((2,3),weight=1,minsize=40)
+    #terrainImageFrame.grid_rowconfigure((0,1,3,4,5,6,7,8,9,10),weight=1,minsize=40)
+    terrainImageFrame.grid_rowconfigure(2,minsize=5)
+    terrainImageNameLabel = ttk.Label(terrainImageFrame,text="Terrain Name",justify="right")
+    terrainImageUrlLabel = ttk.Label(terrainImageFrame,text="Terrain URL",justify="right")
+    terrainImageResLabel = ttk.Label(terrainImageFrame,text="Resolution",justify="right")
+    terrainImageSeparator1 = ttk.Separator(terrainImageFrame,orient="vertical")
+    terrainImageSeparator2 = ttk.Separator(terrainImageFrame,orient="horizontal")
+    terrainImageSeparator3 = ttk.Separator(terrainImageFrame,orient="vertical")
+    terrainImageNameEntry = ttk.Entry(terrainImageFrame,justify="center",textvariable=terrainImageTerrainName)
+    terrainImageURLEntry = ttk.Entry(terrainImageFrame,justify="center",textvariable=terrainImageTerrainURL)
+    terrainImageTerrainURL.set("https://atlas.plan-ops.fr/data/1/maps/???/???/")
+    terrainImageResFrame = ttk.Frame(terrainImageFrame,padding=4,relief="sunken")
+    terrainImageResRadioButtonCrap = ttk.Radiobutton(terrainImageResFrame,text="Crap",variable=terrainImageResolution,value="0")
+    terrainImageResRadioButtonBad = ttk.Radiobutton(terrainImageResFrame,text="Bad",variable=terrainImageResolution,value="1")
+    terrainImageResRadioButtonNotokay = ttk.Radiobutton(terrainImageResFrame,text="Not Okay",variable=terrainImageResolution,value="2")
+    terrainImageResRadioButtonOkay = ttk.Radiobutton(terrainImageResFrame,text="Okay",variable=terrainImageResolution,value="3")
+    terrainImageResRadioButtonGood = ttk.Radiobutton(terrainImageResFrame,text="Good",variable=terrainImageResolution,value="4")
+    terrainImageResRadioButtonExcellent = ttk.Radiobutton(terrainImageResFrame,text="Excellent",variable=terrainImageResolution,value="5")
+    terrainImageResRadioButtonFantastic = ttk.Radiobutton(terrainImageResFrame,text="HDD Filler",variable=terrainImageResolution,value="6")
+    terrainImageDownloadButton = ttk.Button(terrainImageFrame,text="Download",command=lambda: Download())
+    terrainImageFrame.grid(column="0",row="0",sticky="NEW")
+    terrainImageNameLabel.grid(column="0",row="0",sticky="NW")
+    terrainImageUrlLabel.grid(column="0",row="1",sticky="NW")
+    terrainImageResLabel.grid(column="0",row="3",sticky="NW")
+    terrainImageSeparator1.grid(column="1",row="0",rowspan="2",sticky="NS")
+    terrainImageSeparator2.grid(column="0",row="2",columnspan="3",sticky="EW")
+    terrainImageSeparator3.grid(column="1",row="3",rowspan="7",sticky="NS")
+    terrainImageNameEntry.grid(column="2",row="0",columnspan="2",sticky="NEW",pady="4")
+    terrainImageURLEntry.grid(column="2",row="1",columnspan="2",sticky="NEW",pady="4")
+    terrainImageResFrame.grid(column="2",row="3",rowspan="7",sticky="NW")
+    terrainImageResRadioButtonCrap.grid(column="0",row="0",sticky="NW")
+    terrainImageResRadioButtonBad.grid(column="0",row="1",sticky="NW")
+    terrainImageResRadioButtonNotokay.grid(column="0",row="2",sticky="NW")
+    terrainImageResRadioButtonOkay.grid(column="0",row="3",sticky="NW")
+    terrainImageResRadioButtonGood.grid(column="0",row="4",sticky="NW")
+    terrainImageResRadioButtonExcellent.grid(column="0",row="5",sticky="NW")
+    terrainImageResRadioButtonFantastic.grid(column="0",row="6",sticky="NW")
+    terrainImageDownloadButton.grid(column="0",row="10",columnspan="4",sticky="NEW")
+
+
+def NewTerrainImage(url: str,resolution: str,terrainImagePreviewSquare:ttk.Label,terrainStitchDiagram:ttk.Label,toplevel: Toplevel)-> Image.Image:
+    """Used to select a new map image to be obtained from plan-ops"""
+    mapImageURL=url#"https://atlas.plan-ops.fr/data/1/maps/160/162/" Mehland
+    mapImageURL=mapImageURL+resolution+"/"
+    completed = False
+    y = 0
+    images = []
+    stitch = ""
+    while completed == False:
+        line = False
+        x = 0
+        rowImages = []
+        while line == False:
+            response = requests.get(mapImageURL+str(x)+"/"+str(y)+".png")
+            if response.status_code == 200:
+                rowImages.append(Image.open(BytesIO(response.content)).convert("RGB"))
+                image = ImageTk.PhotoImage(Image.open(BytesIO(response.content)).convert("RGB"))
+                terrainImagePreviewSquare["image"] = image
+                terrainImagePreviewSquare.image = image
+                #terrainImagePreviewSquare.update_idletasks()
+                #▦
+                stitch += "■  "
+                terrainStitchDiagram["text"] = stitch
+                toplevel.update()
+                x+=1
+            elif x == 0:
+                completed = True
+                line = True
+                break
+            else:
+                images.append(rowImages)
+                line = True
+        y+=1
+        stitch += "\n"
+    newMapImage = Image.new("RGB",(images[0][0].width*len(images[0]),images[0][0].height*len(images)))
+    for x,row in enumerate(images):
+        for y,image in enumerate(row):
+            newMapImage.paste(image,(image.height*y,image.width*x))
+    return newMapImage
+
 maxRow, maxCol,maxTerrainHeight = 0,0,0.0
 
 def TerrainChange(*args):
+
     """Change the selected terrain"""
     global terrainHeightMap
     global maxRow
@@ -888,10 +1060,11 @@ def TerrainChange(*args):
             StatusMessageLog(privateMessage=F"Loading {terrain.get()} Height map")
             statusMessageLabel.update_idletasks()
             Json_Save(source=0,newEntry={"terrain" : terrain.get()},localOverride=True)
-            terrainHeightMap = pd.read_csv(baseDir/"Terrains"/terrain.get()/(terrain.get()+".gzcsv"),compression="gzip")
+            terrainHeightMap = pd.read_csv(baseDir/"Terrains"/terrain.get()/(terrain.get()+".gzcsv"),compression="gzip")#USE THREADING TO MAKE THE PROGRAM RESPONSIVE
             maxRow, maxCol = terrainHeightMap.shape
             maxTerrainHeight = terrainHeightMap.to_numpy().max()
-            StatusMessageLog("Loaded "+terrain.get().replace("_"," ")+ " Height map")
+            StatusMessageLog("Loaded "+terrain.get()+ " Height map")
+            plotWidget.UpdateMap(xLimit=maxRow,yLimit=maxCol,mapDir=baseDir/"Terrains"/"Mehland"/"Mehland.png")
             root.bell()
         except Exception as e:
             StatusMessageErrorDump(e,errorMessage=f"Could not find terrain height map data for {terrain.get()}")
@@ -1637,18 +1810,32 @@ def ProcessResults(results, setting):
     if 'error' in results:
         StatusMessageLog(results['error'])
         return
-    
     def ProcessStep(step=0):
         if step == 0 and setting == 0 and 'common' in results:
-            root.after(1, lambda: ProcessCommonSettings(results['common']))
+            try:
+                results['common']
+                root.after(1, lambda: ProcessCommonSettings(results['common']))
+            except Exception as e: StatusMessageErrorDump(e,errorMessage="Error on processing common JSON")
         elif step == 1 and setting == 1 and 'idfp' in results:
-            root.after(1, lambda: IDFPUpdate(list(results['idfp'].keys())))
+            try:
+                list(results['idfp'].keys())
+                root.after(1, lambda: IDFPUpdate(list(results['idfp'].keys())))
+            except Exception as e: StatusMessageErrorDump(e,errorMessage="Error on processing IDFP JSON")
         elif step == 2 and setting == 2 and 'friend' in results:
-            root.after(1, lambda: FriendliesUpdate(list(results['friend'].keys())))
+            try:
+                list(results['friend'].keys())
+                root.after(1, lambda: FriendliesUpdate(list(results['friend'].keys())))
+            except Exception as e: StatusMessageErrorDump(e,errorMessage="Error on processing Friendly JSON")
         elif step == 3 and setting == 3 and 'targets' in results:
-            root.after(1, lambda: TargetsUpdate(results['targets']))
+            try:
+                results['targets']
+                root.after(1, lambda: TargetsUpdate(results['targets']))
+            except Exception as e: StatusMessageErrorDump(e,errorMessage="Error on processing Target JSON")
         elif step == 4 and setting == 4 and 'fire mission' in results:
-            root.after(1, lambda: FireMissionLoadInfo(results['fire mission']))
+            try:
+                results['fire mission']
+                root.after(1, lambda: FireMissionLoadInfo(results['fire mission']))
+            except Exception as e: StatusMessageErrorDump(e,errorMessage="Error on processing Fire mission JSON")
     
     # Process the appropriate step
     ProcessStep(setting)
@@ -2042,7 +2229,8 @@ def create_checkboxes(frame: ttk.Frame, Checkbox_vars,seriesDict,FPFSelection = 
         try:
             if widget.winfo_exists():
                 clockHandOffset = (float(Json_Load(source=4)[idfpNotebook.tab(idfpNotebook.select(),"text")][prefix+"-"+widget.cget("text")]["TOF"]))
-                clockOffset.set(f"{prefix}-{widget.cget("text")}")
+                textTemp = widget.cget("text")
+                clockOffset.set(f"{prefix}-{textTemp}")
             else:
                 clockHandOffset = (float(Json_Load(source=4)[idfpNotebook.tab(idfpNotebook.select(),"text")][text]["TOF"]))
                 clockOffset.set(text)
@@ -2130,58 +2318,62 @@ def create_checkboxes(frame: ttk.Frame, Checkbox_vars,seriesDict,FPFSelection = 
 def TargetsUpdate(targetJSON):
     global targetList
     targetList = targetJSON
-    for mission, targets in list(targetJSON.items()):
-        if mission == "FPF":
-            prefix = "FPF"
-            canvas = targetListFPFCanvas
-            canvasFrame = targetListFPFCanvasFrame
-        elif mission == "LR":
-            prefix = "LR"
-            canvas = targetListLRCanvas
-            canvasFrame = targetListLRCanvasFrame
-        elif mission == "XY":
-            prefix = "XY"
-            canvas = targetListXYCanvas
-            canvasFrame = targetListXYCanvasFrame
-        elif mission == "Combo":
-            prefix = "Combo"
-            canvas = targetListComboCanvas
-            canvasFrame = targetListComboCanvasFrame
-        for target in list(targets.keys()):
-            if target not in listCheckBox_vars[prefix]:
-                try:
-                    listCheckBox_vars[prefix][target]
+    try: targetJSON.items()
+    except Exception as e:
+        StatusMessageErrorDump(e,errorMessage="Target JSON error")
+    else:
+        for mission, targets in list(targetJSON.items()):
+            if mission == "FPF":
+                prefix = "FPF"
+                canvas = targetListFPFCanvas
+                canvasFrame = targetListFPFCanvasFrame
+            elif mission == "LR":
+                prefix = "LR"
+                canvas = targetListLRCanvas
+                canvasFrame = targetListLRCanvasFrame
+            elif mission == "XY":
+                prefix = "XY"
+                canvas = targetListXYCanvas
+                canvasFrame = targetListXYCanvasFrame
+            elif mission == "Combo":
+                prefix = "Combo"
+                canvas = targetListComboCanvas
+                canvasFrame = targetListComboCanvasFrame
+            for target in list(targets.keys()):
+                if target not in listCheckBox_vars[prefix]:
+                    try:
+                        listCheckBox_vars[prefix][target]
+                    except KeyError:
+                        listCheckBox_vars[prefix][target] = (BooleanVar(),BooleanVar())
+                        sorted_items = Sort_FireMissions(listCheckBox_vars[prefix])
+                        create_checkboxes(canvasFrame,{key: listCheckBox_vars[prefix][key] for key in sorted_items},seriesDict[prefix])
+                        update_scrollregion(canvasFrame,canvas)
+        for mission, targets in listCheckBox_vars.items():
+            if mission == "FPF":
+                prefix = "FPF"
+                canvas = targetListFPFCanvas
+                canvasFrame = targetListFPFCanvasFrame
+            elif mission == "LR":
+                prefix = "LR"
+                canvas = targetListLRCanvas
+                canvasFrame = targetListLRCanvasFrame
+            elif mission == "XY":
+                prefix = "XY"
+                canvas = targetListXYCanvas
+                canvasFrame = targetListXYCanvasFrame
+            elif mission == "Combo":
+                prefix = "Combo"
+                canvas = targetListComboCanvas
+                canvasFrame = targetListComboCanvasFrame
+            for target in list(targets.keys()):
+                try: targetJSON[mission][target]
                 except KeyError:
-                    listCheckBox_vars[prefix][target] = (BooleanVar(),BooleanVar())
+                    listCheckBox_vars[mission].pop(target,None)
+                    for delSeries in [digit for digit in list(seriesDict[mission].keys()) if Counter(key[:1] for key in listCheckBox_vars[mission].keys()).get(digit,0) <= 1]:
+                        seriesDict[mission].pop(delSeries,None)
                     sorted_items = Sort_FireMissions(listCheckBox_vars[prefix])
                     create_checkboxes(canvasFrame,{key: listCheckBox_vars[prefix][key] for key in sorted_items},seriesDict[prefix])
                     update_scrollregion(canvasFrame,canvas)
-    for mission, targets in listCheckBox_vars.items():
-        if mission == "FPF":
-            prefix = "FPF"
-            canvas = targetListFPFCanvas
-            canvasFrame = targetListFPFCanvasFrame
-        elif mission == "LR":
-            prefix = "LR"
-            canvas = targetListLRCanvas
-            canvasFrame = targetListLRCanvasFrame
-        elif mission == "XY":
-            prefix = "XY"
-            canvas = targetListXYCanvas
-            canvasFrame = targetListXYCanvasFrame
-        elif mission == "Combo":
-            prefix = "Combo"
-            canvas = targetListComboCanvas
-            canvasFrame = targetListComboCanvasFrame
-        for target in list(targets.keys()):
-            try: targetJSON[mission][target]
-            except KeyError:
-                listCheckBox_vars[mission].pop(target,None)
-                for delSeries in [digit for digit in list(seriesDict[mission].keys()) if Counter(key[:1] for key in listCheckBox_vars[mission].keys()).get(digit,0) <= 1]:
-                    seriesDict[mission].pop(delSeries,None)
-                sorted_items = Sort_FireMissions(listCheckBox_vars[prefix])
-                create_checkboxes(canvasFrame,{key: listCheckBox_vars[prefix][key] for key in sorted_items},seriesDict[prefix])
-                update_scrollregion(canvasFrame,canvas)
 
 def TargetAdd():
     new_item = targetReference.get().strip()
@@ -2439,11 +2631,11 @@ def Calculate():
                 details = targets[mission][target]
                 idfpSelection = Json_Load(0,localOverride=True)["IDFPSelection"]
                 for idfp in [list(IDFPDict.keys())[i] for i in list(idfpSelection)]:
-                    #try :
+                    try :
                         StatusMessageLog(message=f"Beginning calculation of {mission}-{target}")
                         solution = solutions(details,idfp)
-                    #except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to calculate {mission}-{target}")
-                    #else:
+                    except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to calculate {mission}-{target}")
+                    else:
                         FireMissionUpdate(solution,idfp,f"{mission}-{target}")
                         StatusMessageLog(message="Calculated {}-{}, Range: {}m, Bearing: {:03d}°".format(mission,target,int(solution["Range"]),int(solution["Bearing"]*180/np.pi)))
                         statusMessageLabel.update()
@@ -2685,18 +2877,21 @@ def UpdateFireMissionNotebook(FireMissions):
 def FireMissionDisplayTabUpdate(FireMissions):
     global idfpNotebookFrameDict
     tabs = []
-    for tabId in idfpNotebook.tabs():
-        tabs.append(idfpNotebook.tab(tabId,option="text"))
-        if idfpNotebook.tab(tabId,option="text") not in FireMissions.keys():
-            idfpNotebook.forget(tabId)
-            try: del idfpNotebookFrameDict[idfpNotebook.tab(tabId,option="text")]
-            except Exception as e: StatusMessageErrorDump(e,errorMessage="Failed to remove Fire Missions")
-    for idfp in FireMissions.keys():
-        if idfp not in tabs:
-            idfpNotebookFrame = ttk.Frame(idfpNotebook,width="500")
-            idfpNotebookFrameDict[idfp] = idfpNotebookFrame
-            IDFPTextFrameConfiguration(idfpNotebookFrame)
-            idfpNotebook.add(idfpNotebookFrame,text=idfp,sticky="NESW",padding="10")
+    try: FireMissions.keys()
+    except Exception as e: StatusMessageErrorDump(e,errorMessage="Fire Mission JSON error")
+    else:
+        for tabId in idfpNotebook.tabs():
+            tabs.append(idfpNotebook.tab(tabId,option="text"))
+            if idfpNotebook.tab(tabId,option="text") not in FireMissions.keys():
+                idfpNotebook.forget(tabId)
+                try: del idfpNotebookFrameDict[idfpNotebook.tab(tabId,option="text")]
+                except Exception as e: StatusMessageErrorDump(e,errorMessage="Failed to remove Fire Missions")
+        for idfp in FireMissions.keys():
+            if idfp not in tabs:
+                idfpNotebookFrame = ttk.Frame(idfpNotebook,width="500")
+                idfpNotebookFrameDict[idfp] = idfpNotebookFrame
+                IDFPTextFrameConfiguration(idfpNotebookFrame)
+                idfpNotebook.add(idfpNotebookFrame,text=idfp,sticky="NESW",padding="10")
 
 
 
@@ -2732,6 +2927,10 @@ def CancelSettingChange(StrVar: StringVar, label: Widget,stringvar = ""):
     StrVar.set(" ")
     LabelBold(label,type="Normal",stringvar=stringvar)
     boldLables[stringvar] = False
+
+
+
+
 
 def Maps():
     None
@@ -3413,6 +3612,8 @@ mapPageFrame0 = ttk.Frame(mapPagePane0,height=800,width=800,padding=5)
 mapPageFrame1 = ttk.Frame(mapPagePane1,height=400,width=400,padding=5)
 mapPageFrame2 = ttk.Frame(mapPagePane2,height=400,width=400,padding=5)
 
+plotWidget = Map.MatPlotLibWidget(parent=mapPageFrame0)
+
 root.config(menu=menubar)
 system_menu = Menu(menubar,tearoff=False)
 system_menu.add_radiobutton(label="M6",variable=system,value="M6")
@@ -3427,6 +3628,7 @@ terrain_menu = Menu(menubar,tearoff=False)
 
 terrainValue = StringVar()
 terrain_menu.add_command(label="Install New Height Map (Keithenneu)",command=HeightMapFileDialog)
+terrain_menu.add_command(label="Download New Map Image (Plan-ops)",command=TerrainImageFileDialog)
 terrain_menu.add_separator()
 
 flipPaneSide = StringVar()
