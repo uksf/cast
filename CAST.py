@@ -1,5 +1,5 @@
 testCommandLine = ["--json","local"]
-version = "v0.0.4 Alpha"
+version = "v0.0.4"
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -9,8 +9,6 @@ from pathlib import Path
 import numpy as np
 import re
 import requests
-from PIL import Image,ImageTk
-from io import BytesIO
 import json
 import os
 import sys
@@ -409,8 +407,12 @@ fireMissionMinute = StringVar()
 """The selected minute if 'Time' is selected for FM"""
 fireMissionSecond = StringVar()
 """The selected second if 'Time' is selected for FM"""
-fireMissionPairedEffect = StringVar()
-"""Selected mission if multiple FMs are selected for edit"""
+fireMissionGroupEffect = StringVar()
+"""Selected mission if two FMs are selected for edit"""
+fireMissionGroupSpacing = StringVar()
+"""Selected mission if two FMs are selected for edit"""
+fireMissionGroupWidth = StringVar()
+"""Selected mission if two FMs are selected for edit"""
 
 clockOffset = StringVar()
 """Clock Offset used for fire mission splashes"""
@@ -433,7 +435,7 @@ targetList = {
     "LR" : {},
     "XY" : {},
     "FPF" : {},
-    "Combo" : {}
+    "Group" : {}
     }
 """
 Example Fire mission
@@ -454,14 +456,13 @@ seriesDict = {
     "LR" : {},
     "XY" : {},
     "FPF" : {},
-    "Combo" : {}
     }
 """Used to keep track of series of fire missions"""
 listCheckBox_vars = {
     "LR" : {},
     "XY" : {},
     "FPF" : {},
-    "Combo" : {}
+    "Group" : {}
     }
 """Used to keep track of the Checkboxes in the UI of the firemissions"""
 
@@ -931,7 +932,7 @@ def TerrainImageFileDialog():
                 terrainImageTopLevel.grab_release()
                 terrainImagePreviewTopLevel = Toplevel(root)
                 terrainImagePreviewTopLevel.grab_set()
-                terrainImagePreviewTopLevel.title("Map Download and Stitch")
+                terrainImagePreviewTopLevel.title("Map Download")
                 terrainImagePreviewTopLevel.geometry("746x323+0+0")
                 terrainImagePreviewTopLevel.iconbitmap(exeDir/"Functions"/"uksf.ico")
                 terrainImagePreviewWindow = terrainImagePreviewTopLevel.winfo_toplevel()
@@ -944,7 +945,7 @@ def TerrainImageFileDialog():
                 terrainImagePreviewFrame.grid(column="0",row="0",sticky="NESW")
                 terrainImagePreviewMap.grid(column="0",row="0",sticky="NW")
                 terrainImagePreviewStitch.grid(column="1",row="0",sticky="NW")
-                newImage = NewTerrainImage(terrainImageTerrainURL.get(),terrainImageResolution.get(),terrainImagePreviewMap,terrainImagePreviewStitch,terrainImagePreviewTopLevel)
+                newImage = Map.TerrainImage.NewTerrainImage(terrainImageTerrainURL.get(),terrainImageResolution.get(),terrainImagePreviewMap,terrainImagePreviewStitch,terrainImagePreviewTopLevel)
                 newImage.save(baseDir/"Terrains"/terrainImageTerrainName.get()/(terrainImageTerrainName.get()+".png"))
                 StatusMessageLog(message=f"Downloaded {terrainImageTerrainName.get()} terrain map")
                 terrainImagePreviewTopLevel.grab_release()
@@ -1008,45 +1009,7 @@ def TerrainImageFileDialog():
     terrainImageDownloadButton.grid(column="0",row="10",columnspan="4",sticky="NEW")
 
 
-def NewTerrainImage(url: str,resolution: str,terrainImagePreviewSquare:ttk.Label,terrainStitchDiagram:ttk.Label,toplevel: Toplevel)-> Image.Image:
-    """Used to select a new map image to be obtained from plan-ops"""
-    mapImageURL=url#"https://atlas.plan-ops.fr/data/1/maps/160/162/" Mehland
-    mapImageURL=mapImageURL+resolution+"/"
-    completed = False
-    y = 0
-    images = []
-    stitch = ""
-    while completed == False:
-        line = False
-        x = 0
-        rowImages = []
-        while line == False:
-            response = requests.get(mapImageURL+str(x)+"/"+str(y)+".png")
-            if response.status_code == 200:
-                rowImages.append(Image.open(BytesIO(response.content)).convert("RGB"))
-                image = ImageTk.PhotoImage(Image.open(BytesIO(response.content)).convert("RGB"))
-                terrainImagePreviewSquare["image"] = image
-                terrainImagePreviewSquare.image = image
-                #terrainImagePreviewSquare.update_idletasks()
-                #▦
-                stitch += "■  "
-                terrainStitchDiagram["text"] = stitch
-                toplevel.update()
-                x+=1
-            elif x == 0:
-                completed = True
-                line = True
-                break
-            else:
-                images.append(rowImages)
-                line = True
-        y+=1
-        stitch += "\n"
-    newMapImage = Image.new("RGB",(images[0][0].width*len(images[0]),images[0][0].height*len(images)))
-    for x,row in enumerate(images):
-        for y,image in enumerate(row):
-            newMapImage.paste(image,(image.height*y,image.width*x))
-    return newMapImage
+
 
 maxRow, maxCol,maxTerrainHeight = 0,0,0.0
 
@@ -1097,7 +1060,7 @@ def ClearMessageLog():
 
 def ClearFireMission(mission = "", name = "",calculated = False):
     """
-    Will the mission (LR,XY,FPF,Combo) and take the name suffixes (...-##) and remove it from the target jsons, the calculated ones to if calculated == True
+    Will the mission (LR,XY,FPF,Group) and take the name suffixes (...-##) and remove it from the target jsons, the calculated ones to if calculated == True
     
     If name is left empty ("") then all targets/fire missions of the selected mission will be deleted. if mission is not specified. all is removed.
     """
@@ -1662,14 +1625,16 @@ def FireMissionConditionChange(*args):
         fireMissionSecond.set(datetime.now().strftime("%S"))
     else:
         fireMissionSelectionTimeLabelframe.grid_remove()
-def AddPairedMission():
-    fireMissionSelectionPairedEffectSeriesRadio.grid_remove()
 
-def PairedMissionChange(*args):
-    if fireMissionPairedEffect.get() == "Creeping_Barrage":
-        fireMissionSelectionPairedEffectCreepingLabelframe.grid()
+def FireMissionGroupEffectChange():
+    if fireMissionGroupEffect.get() == "Creeping Barrage":
+        fireMissionGroupSelectionDispersionWidthLabel.grid()
+        fireMissionGroupSelectionDispersionWidthCombobox.grid()
+        fireMissionGroupSelectionDispersionWidthUnitLabel.grid()
     else:
-        fireMissionSelectionPairedEffectCreepingLabelframe.grid_remove()
+        fireMissionGroupSelectionDispersionWidthLabel.grid_remove()
+        fireMissionGroupSelectionDispersionWidthCombobox.grid_remove()
+        fireMissionGroupSelectionDispersionWidthUnitLabel.grid_remove()
 
 def DrawClockFace(clockCanv: Canvas):
     clockCanv["width"]=clockWidth
@@ -2122,18 +2087,34 @@ def RequestEditFireMissionsFromSafety(*args):
     for target, (edit, calculate) in seriesDict["XY"].items(): edit.set(False)
     for target, (edit, calculate) in listCheckBox_vars["FPF"].items(): edit.set(False)
     for target, (edit, calculate) in seriesDict["FPF"].items(): edit.set(False)
-    for target, (edit, calculate) in listCheckBox_vars["Combo"].items(): edit.set(False)
-    for target, (edit, calculate) in seriesDict["Combo"].items(): edit.set(False)
+    for target, (edit, calculate) in listCheckBox_vars["Group"].items(): edit.set(False)
     create_checkboxes(targetListLRCanvasFrame,{key: listCheckBox_vars["LR"][key] for key in Sort_FireMissions(listCheckBox_vars["LR"])},seriesDict["LR"])
     create_checkboxes(targetListXYCanvasFrame,{key: listCheckBox_vars["XY"][key] for key in Sort_FireMissions(listCheckBox_vars["XY"])},seriesDict["XY"])
-    create_checkboxes(targetListFPFCanvasFrame,{key: listCheckBox_vars["FPF"][key] for key in Sort_FireMissions(listCheckBox_vars["FPF"])},seriesDict["FPF"])
-    create_checkboxes(targetListComboCanvasFrame,{key: listCheckBox_vars["Combo"][key] for key in Sort_FireMissions(listCheckBox_vars["Combo"])},seriesDict["Combo"])
+    create_checkboxes(targetListFPFCanvasFrame,{key: listCheckBox_vars["FPF"][key] for key in Sort_FireMissions(listCheckBox_vars["FPF"])},seriesDict["FPF"],FPFSelection=True)
+    create_checkboxes(targetListGroupCanvasFrame,listCheckBox_vars["Group"],None,False,True)
     RequestEditFireMissions()
+
+fireMissionGroupSelectionReverse = False
+def ReverseFireMissionGroupSelections(event = None):
+    def Reverse():
+        global fireMissionGroupSelectionReverse
+        if fireMissionGroupSelectionReverse:
+            fireMissionGroupSelectionReverse = False
+        else:
+            fireMissionGroupSelectionReverse = True
+        RequestEditFireMissions()
+    if event != None:
+        fireMissionGroupSelectionReverseMenu = Menu(root,tearoff=False)
+        fireMissionGroupSelectionReverseMenu.add_command(label="Reverse targets",command=lambda: Reverse())
+        fireMissionGroupSelectionReverseMenu.post(event.x_root,event.y_root)
+    else:
+        Reverse()
 
 def RequestEditFireMissions():
     global FPFEditSelected
     global previousMissionEffect
-    editList = ""
+    editListStr = ""
+    editList = []
     editCount = 0
     FPFEditSelected = False
     for target, (edit, calculate) in listCheckBox_vars["FPF"].items():
@@ -2144,19 +2125,21 @@ def RequestEditFireMissions():
         for target, (edit, calculate) in listCheckBox_vars["LR"].items():
             if edit.get() == True:
                 editCount +=1
-                editList += ("LR "+target + " | ")
+                editListStr += ("LR "+target + " | ")
+                editList.append(f"LR-{target}")
         for target, (edit, calculate) in listCheckBox_vars["XY"].items():
             if edit.get() == True:
                 editCount +=1
-                editList += ("XY "+target + " | ")
-        for target, (edit, calculate) in listCheckBox_vars["Combo"].items():
+                editListStr += ("XY "+target + " | ")
+                editList.append(f"XY-{target}")
+        for target, (edit, calculate) in listCheckBox_vars["Group"].items():
             if edit.get() == True:
                 editCount +=1
-                editList += ("Combo "+target + " | ")
+                editListStr += ("Group "+target + " | ")
         create_checkboxes(targetListLRCanvasFrame,{key: listCheckBox_vars["LR"][key] for key in Sort_FireMissions(listCheckBox_vars["LR"])},seriesDict["LR"])
         create_checkboxes(targetListXYCanvasFrame,{key: listCheckBox_vars["XY"][key] for key in Sort_FireMissions(listCheckBox_vars["XY"])},seriesDict["XY"])
         create_checkboxes(targetListFPFCanvasFrame,{key: listCheckBox_vars["FPF"][key] for key in Sort_FireMissions(listCheckBox_vars["FPF"])},seriesDict["FPF"],True)
-        create_checkboxes(targetListComboCanvasFrame,{key: listCheckBox_vars["Combo"][key] for key in Sort_FireMissions(listCheckBox_vars["Combo"])},seriesDict["Combo"])
+        create_checkboxes(targetListGroupCanvasFrame,listCheckBox_vars["Group"],None,False,True)
         if xylrfpf.get() !="2":
             fireMissionSelectionEffectFPFRadio.grid_remove()
             fireMissionSelectionEffectDestroyRadio.grid()
@@ -2171,7 +2154,8 @@ def RequestEditFireMissions():
         for target, (edit, calculate) in listCheckBox_vars["FPF"].items():
             if edit.get() == True:
                 editCount +=1
-                editList += ("FPF "+target + " | ")
+                editListStr += ("FPF "+target + " | ")
+                editList.append(f"FPF-{target}")
         for target, (edit, calculate) in listCheckBox_vars["LR"].items():
             edit.set(False)
         for target, (edit, calculate) in seriesDict["LR"].items():
@@ -2180,14 +2164,14 @@ def RequestEditFireMissions():
             edit.set(False)
         for target, (edit, calculate) in seriesDict["XY"].items():
             edit.set(False)
-        for target, (edit, calculate) in listCheckBox_vars["Combo"].items():
+        for target, (edit, calculate) in listCheckBox_vars["Group"].items():
             edit.set(False)
-        for target, (edit, calculate) in seriesDict["Combo"].items():
+        for target, (edit, calculate) in seriesDict["Group"].items():
             edit.set(False)
         create_checkboxes(targetListLRCanvasFrame,{key: listCheckBox_vars["LR"][key] for key in Sort_FireMissions(listCheckBox_vars["LR"])},seriesDict["LR"])
         create_checkboxes(targetListXYCanvasFrame,{key: listCheckBox_vars["XY"][key] for key in Sort_FireMissions(listCheckBox_vars["XY"])},seriesDict["XY"])
         create_checkboxes(targetListFPFCanvasFrame,{key: listCheckBox_vars["FPF"][key] for key in Sort_FireMissions(listCheckBox_vars["FPF"])},seriesDict["FPF"],True)
-        create_checkboxes(targetListComboCanvasFrame,{key: listCheckBox_vars["Combo"][key] for key in Sort_FireMissions(listCheckBox_vars["Combo"])},seriesDict["Combo"])
+        create_checkboxes(targetListGroupCanvasFrame,listCheckBox_vars["Group"],None,False,True)
         fireMissionSelectionEffectDestroyRadio.grid_remove()
         fireMissionSelectionEffectNeutraliseRadio.grid_remove()
         fireMissionSelectionEffectCheckRadio.grid_remove()
@@ -2196,7 +2180,7 @@ def RequestEditFireMissions():
         fireMissionSelectionEffectSmokeRadio.grid_remove()
         fireMissionSelectionEffectIllumRadio.grid_remove()
         fireMissionSelectionEffectFPFRadio.grid()
-    if editList == "":
+    if editListStr == "":
         fireMissionSelectionLabelframe["text"] = "Fire Mission Selection"
         if xylrfpf.get() =="2":
             fireMissionSelectionEffectDestroyRadio.grid_remove()
@@ -2218,10 +2202,20 @@ def RequestEditFireMissions():
             fireMissionSelectionEffectIllumRadio.grid()
         fireMissionSelectionUpdateMission.grid_remove()
     else:
-        fireMissionSelectionLabelframe["text"] = editList + "Edit missions"
+        fireMissionSelectionLabelframe["text"] = editListStr + "Edit missions"
         fireMissionSelectionUpdateMission.grid()
         if editCount == 1:
             FireMissionEdit()
+        if editCount == 2:
+            fireMissionGroupSelectionLabelframe.grid()
+            if fireMissionGroupSelectionReverse:
+                fireMissionGroupSelection1NameLabel["text"] = editList[1]
+                fireMissionGroupSelection2NameLabel["text"] = editList[0]
+            else:
+                fireMissionGroupSelection1NameLabel["text"] = editList[0]
+                fireMissionGroupSelection2NameLabel["text"] = editList[1]
+        else:
+            fireMissionGroupSelectionLabelframe.grid_remove()
 
 def FireMissionEdit(*args):
     def PasteSettings(prefix,target,targets):
@@ -2383,19 +2377,20 @@ def on_mouse_enter(event):
                         statusReferenceLabel["text"] = "FPF-"+widg["text"]
                         statusGridLabel["text"] = targetList["FPF"][widg["text"]]["GridX"]+","+ targetList["FPF"][widg["text"]]["GridY"]
                         statusHeightLabel["text"] = targetList["FPF"][widg["text"]]["Height"]
-                    if labelframe["text"] == "Combo":
+                    if labelframe["text"] == "Group":
                         statusReferenceLabel["text"] = widg["text"]
-                        statusGridLabel["text"] = targetList["Combo"][widg["text"]]["GridX"]+","+ targetList["Combo"][widg["text"]]["GridY"]
-                        statusHeightLabel["text"] = targetList["Combo"][widg["text"]]["Height"]
+                        statusGridLabel["text"] = targetList["Group"][widg["text"]]["GridX"]+","+ targetList["Group"][widg["text"]]["GridY"]
+                        statusHeightLabel["text"] = targetList["Group"][widg["text"]]["Height"]
     except:StatusMessageLog(message="",privateMessage="Unable to display target details on the status bar")
 
-def create_checkboxes(frame: ttk.Frame, Checkbox_vars,seriesDict,FPFSelection = False):
+def create_checkboxes(frame: ttk.Frame, Checkbox_vars,seriesDict,FPFSelection = False,GroupSelection = False):
     def ShowContextMenu(event,widget: Widget):
         text = widget.cget("text") if widget.winfo_exists() else None
         targetContextMenu.delete(0,END)
         prefix = frame.master.master.cget("text")
-        targetContextMenu.add_command(label="Copy Grid",command=lambda w=widget,t=text,p=prefix: CopyGrid(w,t,p))
-        targetContextMenu.add_command(label="Clock Splash Offset",command=lambda w=widget,t=text,p=prefix: ClockSplashOffset(w,t,p))
+        if GroupSelection == False:
+            targetContextMenu.add_command(label="Copy Grid",command=lambda w=widget,t=text,p=prefix: CopyGrid(w,t,p))
+            targetContextMenu.add_command(label="Clock Splash Offset",command=lambda w=widget,t=text,p=prefix: ClockSplashOffset(w,t,p))
         targetContextMenu.add_command(label="Delete Fire mission",command=lambda: ClearFireMission(mission=prefix,name=text,calculated=True))
         targetContextMenu.post(event.x_root,event.y_root)
     def CopyGrid(widget: Widget,text,prefix):
@@ -2432,7 +2427,7 @@ def create_checkboxes(frame: ttk.Frame, Checkbox_vars,seriesDict,FPFSelection = 
     row = 0
     currentSeries = ""
     for item, (var1, var2) in Checkbox_vars.items():
-        if series.count(item[:1]) ==1:
+        if series.count(item[:1]) ==1 or GroupSelection:
             sep = ttk.Separator(frame,orient="horizontal")
             sep.grid(row=row,column=0,columnspan=5,sticky="WE",pady="4")
             row+=1
@@ -2442,11 +2437,12 @@ def create_checkboxes(frame: ttk.Frame, Checkbox_vars,seriesDict,FPFSelection = 
                 chk1 = ttk.Checkbutton(frame, variable=var1,command=RequestEditFireMissions,state="disabled")
             else:
                 chk1 = ttk.Checkbutton(frame, variable=var1,command=RequestEditFireMissions,state="normal")
-            chk1.bind("<Enter>",on_mouse_enter)
             chk2 = ttk.Checkbutton(frame, variable=var2)
-            chk2.bind("<Enter>",on_mouse_enter)
             lbl = ttk.Label(frame,text=item)
-            lbl.bind("<Enter>",on_mouse_enter)
+            if GroupSelection == False:
+                chk1.bind("<Enter>",on_mouse_enter)
+                chk2.bind("<Enter>",on_mouse_enter)
+                lbl.bind("<Enter>",on_mouse_enter)
             lbl.bind("<Button-3>",lambda event,widget=lbl: ShowContextMenu(event,widget))
             chk1.grid(row=row,column=0,padx=0,pady=0,sticky="w")
             chk2.grid(row=row,column=1,padx=0,pady=0,sticky="w")
@@ -2501,7 +2497,7 @@ def create_checkboxes(frame: ttk.Frame, Checkbox_vars,seriesDict,FPFSelection = 
             currentSeries = item[:1]
     return Checkbox_vars
 
-def TargetsUpdate(targetJSON):
+def TargetsUpdate(targetJSON): #############FIGURE THIS SHIT OUT
     global targetList
     targetList = targetJSON
     try: targetJSON.items()
@@ -2513,52 +2509,80 @@ def TargetsUpdate(targetJSON):
                 prefix = "FPF"
                 canvas = targetListFPFCanvas
                 canvasFrame = targetListFPFCanvasFrame
+                dictionary = seriesDict["FPF"]
+                FPF = True
+                Group = False
             elif mission == "LR":
                 prefix = "LR"
                 canvas = targetListLRCanvas
                 canvasFrame = targetListLRCanvasFrame
+                dictionary = seriesDict["LR"]
+                FPF = False
+                Group = False
             elif mission == "XY":
                 prefix = "XY"
                 canvas = targetListXYCanvas
                 canvasFrame = targetListXYCanvasFrame
-            elif mission == "Combo":
-                prefix = "Combo"
-                canvas = targetListComboCanvas
-                canvasFrame = targetListComboCanvasFrame
+                dictionary = seriesDict["XY"]
+                FPF = False
+                Group = False
+            elif mission == "Group":
+                prefix = "Group"
+                canvas = targetListGroupCanvas
+                canvasFrame = targetListGroupCanvasFrame
+                dictionary = None
+                FPF = False
+                Group = True
             for target in list(targets.keys()):
                 if target not in listCheckBox_vars[prefix]:
                     try:
                         listCheckBox_vars[prefix][target]
                     except KeyError:
                         listCheckBox_vars[prefix][target] = (BooleanVar(),BooleanVar())
-                        sorted_items = Sort_FireMissions(listCheckBox_vars[prefix])
-                        create_checkboxes(canvasFrame,{key: listCheckBox_vars[prefix][key] for key in sorted_items},seriesDict[prefix])
+                        listedTargets = listCheckBox_vars[prefix]
+                        create_checkboxes(canvasFrame,listedTargets,dictionary,FPF,Group)
                         update_scrollregion(canvasFrame,canvas)
         for mission, targets in listCheckBox_vars.items():
             if mission == "FPF":
                 prefix = "FPF"
                 canvas = targetListFPFCanvas
                 canvasFrame = targetListFPFCanvasFrame
+                listedTargets = {key: listCheckBox_vars[prefix][key] for key in Sort_FireMissions(listCheckBox_vars[prefix])}
+                dictionary = seriesDict["FPF"]
+                FPF = True
+                Group = False
             elif mission == "LR":
                 prefix = "LR"
                 canvas = targetListLRCanvas
                 canvasFrame = targetListLRCanvasFrame
+                listedTargets = {key: listCheckBox_vars[prefix][key] for key in Sort_FireMissions(listCheckBox_vars[prefix])}
+                dictionary = seriesDict["LR"]
+                FPF = False
+                Group = False
             elif mission == "XY":
                 prefix = "XY"
                 canvas = targetListXYCanvas
                 canvasFrame = targetListXYCanvasFrame
-            elif mission == "Combo":
-                prefix = "Combo"
-                canvas = targetListComboCanvas
-                canvasFrame = targetListComboCanvasFrame
+                listedTargets = {key: listCheckBox_vars[prefix][key] for key in Sort_FireMissions(listCheckBox_vars[prefix])}
+                dictionary = seriesDict["XY"]
+                FPF = False
+                Group = False
+            elif mission == "Group":
+                prefix = "Group"
+                canvas = targetListGroupCanvas
+                canvasFrame = targetListGroupCanvasFrame
+                listedTargets = listCheckBox_vars["Group"]
+                dictionary = None
+                FPF = False
+                Group = True
             for target in list(targets.keys()):
                 try: targetJSON[mission][target]
                 except KeyError:
                     listCheckBox_vars[mission].pop(target,None)
-                    for delSeries in [digit for digit in list(seriesDict[mission].keys()) if Counter(key[:1] for key in listCheckBox_vars[mission].keys()).get(digit,0) <= 1]:
-                        seriesDict[mission].pop(delSeries,None)
-                    sorted_items = Sort_FireMissions(listCheckBox_vars[prefix])
-                    create_checkboxes(canvasFrame,{key: listCheckBox_vars[prefix][key] for key in sorted_items},seriesDict[prefix])
+                    if mission != "Group":
+                        for delSeries in [digit for digit in list(seriesDict[mission].keys()) if Counter(key[:1] for key in listCheckBox_vars[mission].keys()).get(digit,0) <= 1]:
+                            seriesDict[mission].pop(delSeries,None)
+                    create_checkboxes(canvasFrame,listedTargets,dictionary,FPF,Group)
                     update_scrollregion(canvasFrame,canvas)
 
 def TargetAdd():
@@ -2573,17 +2597,17 @@ def TargetAdd():
         if new_item and new_item not in listCheckBox_vars[prefix]:
             listCheckBox_vars[prefix][new_item] = (BooleanVar(),BooleanVar())
             sorted_items = Sort_FireMissions(listCheckBox_vars[prefix])
+            print(sorted_items)
+            print({key: listCheckBox_vars[prefix][key] for key in sorted_items})
             if prefix == "LR":
                 create_checkboxes(targetListLRCanvasFrame,{key: listCheckBox_vars[prefix][key] for key in sorted_items},seriesDict[prefix])
             if prefix == "XY":
                 create_checkboxes(targetListXYCanvasFrame,{key: listCheckBox_vars[prefix][key] for key in sorted_items},seriesDict[prefix])    
             if prefix == "FPF":
                 create_checkboxes(targetListFPFCanvasFrame,{key: listCheckBox_vars[prefix][key] for key in sorted_items},seriesDict[prefix])
-            newTarget = {}
-            try: newTarget[prefix] = Json_Load(3)[prefix]
-            except KeyError: newTarget = {prefix : {}}
-            try: targetList[prefix]
-            except: targetList[prefix] = {}
+            prefixTargetList = {}
+            try: prefixTargetList[prefix] = Json_Load(3)[prefix]
+            except: prefixTargetList[prefix] = {}
             mutator = "None"
             orientation = "None"
             if fireMissionWidth.get() != "0" and fireMissionWidth.get() != "" and fireMissionDepth.get() != "0" and fireMissionDepth.get() != "":
@@ -2612,7 +2636,7 @@ def TargetAdd():
                     orientation = "Horizontal"
                 except ValueError: StatusMessageLog(message="Incorrect Width dispersion, defaulting to no diserpsion")
                 except Exception as e: StatusMessageErrorDump(e,errorMessage="Incorrect Width dispersion, defaulting to no diserpsion")
-            targetList[prefix][new_item]= {
+            prefixTargetList[prefix][new_item]= {
                 "GridX" : targetPosX.get(),
                 "GridY" : targetPosY.get(),
                 "Height" : float(targetHeight.get()),
@@ -2627,8 +2651,7 @@ def TargetAdd():
                         "Minute" : int(fireMissionMinute.get()),
                         "Second" : int(fireMissionSecond.get())}
             }
-            newTarget[prefix][new_item] = targetList[prefix][new_item]
-            Json_Save(source=3,newEntry=newTarget)
+            Json_Save(source=3,newEntry=prefixTargetList)
             StatusMessageLog(message=f"Added New Fire mission {prefix}-{new_item}, Position: {targetPosX.get()} {targetPosY.get()}, Height: {targetHeight.get()}")
             if str(new_item)[1:].isdigit():
                 if str(new_item)[1:] == "9":
@@ -2648,7 +2671,44 @@ def TargetAdd():
             elif prefix =="FPF":
                 update_scrollregion(targetListFPFCanvasFrame,targetListFPFCanvas) 
 
+def AddGroupMission():
+    newItem = f"{fireMissionGroupSelection1NameLabel['text']} | {fireMissionGroupSelection2NameLabel['text']}"
+    targets = {"1":fireMissionGroupSelection1NameLabel['text'],"2": fireMissionGroupSelection2NameLabel['text']}
+    if newItem and newItem not in listCheckBox_vars["Group"]:
+        listCheckBox_vars["Group"][newItem] = (BooleanVar(),BooleanVar(value=True))
+        create_checkboxes(targetListGroupCanvasFrame,listCheckBox_vars["Group"],None,GroupSelection=True)
+        groupTargetList = {}
+        try: groupTargetList["Group"] = Json_Load(3)["Group"]
+        except: groupTargetList["Group"] = {}
+        try: int(fireMissionGroupSpacing.get())
+        except Exception as e:
+            StatusMessageErrorDump(e,errorMessage="Incorrect spacing value, using 30m as default")
+            fireMissionGroupSpacing.set("30")
+        else:
+            if int(fireMissionGroupSpacing.get()) <= 0:
+                StatusMessageLog("Spacing value needs to be greater than 0, setting as 30m as default")
+                fireMissionGroupSpacing.set("30")
+        if fireMissionGroupEffect.get() == "Creeping Barrage":
+            try: int(fireMissionGroupWidth.get())
+            except Exception as e:
+                StatusMessageErrorDump(e,errorMessage="Incorrect creeping barrage width value, using 30m as default")
+                fireMissionGroupSpacing.set("30")
+            else:
+                if int(fireMissionGroupWidth.get()) <= 0:
+                    StatusMessageLog("Width value needs to be greater than 0, setting as 150m as default")
+                    fireMissionGroupWidth.set("150")
+            groupTargetList["Group"][newItem] = {"Targets" : targets,
+                                            "Effect" : fireMissionGroupEffect.get(),
+                                            "Spacing" : fireMissionGroupSpacing.get(),
+                                            "Width" : fireMissionGroupWidth.get()}
+        else:
+            groupTargetList["Group"][newItem] = {"Targets" : targets,
+                                            "Effect" : fireMissionGroupEffect.get(),
+                                            "Spacing" : fireMissionGroupSpacing.get()}
+        Json_Save(source=3,newEntry=groupTargetList)
+        StatusMessageLog(message=f"Added new Grouped fire mission between {newItem} of {fireMissionGroupEffect.get()} effect")
 newFireMissionWindow = False
+
 def FireMissionLoadInfo(newfireMissions):
     global FireMissions,newFireMissionWindow
     if newfireMissions != FireMissions or newFireMissionWindow == True:
@@ -2696,7 +2756,7 @@ def Calculate():
     CalculationPhasesTotal("FPF")
     CalculationPhasesTotal("LR")
     CalculationPhasesTotal("XY")
-    for target, (edit, calculate) in listCheckBox_vars["Combo"].items():
+    for target, (edit, calculate) in listCheckBox_vars["Group"].items():
         if calculate.get() == True:
             calculations += 1
             try:
@@ -2708,7 +2768,7 @@ def Calculate():
                 elif targets["Group"][target]["Mutator"] == "LineMultiPoint":
                     if targets["Group"][target]["Explicit"] == True:
                         calculations += 2
-            except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to get Combo mission-{target} mutator")
+            except Exception as e: StatusMessageErrorDump(e,errorMessage=f"Failed to get Group mission-{target} mutator")
 
     statusProgressBar["maximum"] = int(calculations)
     states = {}
@@ -2832,7 +2892,7 @@ def Calculate():
     CalculationIteration("FPF")
     CalculationIteration("LR")
     CalculationIteration("XY")
-    CalculationIteration("Combo")
+    CalculationIteration("Group")
     root.bell()
 
 
@@ -3123,7 +3183,6 @@ def FireMissionDisplayUpdate(FireMissions):
     global idfpNotebookFrameDict
     if idfpNotebookFrameDict!= {}:
         for idfp in FireMissions.keys():
-            print(idfpNotebookFrameDict)
             for tab, frame in idfpNotebookFrameDict.items():
                 if tab == idfp:
                     for widget in frame[0].winfo_children():
@@ -3431,14 +3490,14 @@ targetInputHeightUnitLabel = ttk.Label(targetInputFrame,justify="left",text="m")
 targetInputReferenceAdd = ttk.Button(targetInputFrame,text="Add",command=lambda *args: TargetAdd())
 
 pane2pane.add(pane22,weight=1)
-pane22.grid_rowconfigure(0,weight=1)
-pane22.grid_columnconfigure(0,weight=1)
+pane22.grid_rowconfigure((0,1),weight=1)
+pane22.grid_rowconfigure(1,minsize=20)
+pane22.grid_columnconfigure((0,1),weight=1)
 fireMissionSelectionLabelframe = ttk.Labelframe(pane22,text="Fire Mission Selection",height=200,width=500,padding=5,relief="groove")
 fireMissionSelectionLabelframe.grid_columnconfigure((0,1,2,3),minsize=70,weight=1)
 fireMissionSelectionLabelframe.grid_rowconfigure((0,1,2,3),weight=1)
-fireMissionSelectionEffectLabelframe = ttk.Labelframe(fireMissionSelectionLabelframe,text="Effect")
-fireMissionSelectionEffectLabelframe.grid_columnconfigure((0,2),weight=5)
-fireMissionSelectionEffectLabelframe.grid_columnconfigure(1,weight=1)
+fireMissionSelectionEffectLabelframe = ttk.Labelframe(fireMissionSelectionLabelframe,text="Effect",relief="groove")
+fireMissionSelectionEffectLabelframe.grid_columnconfigure(0,weight=5)
 fireMissionSelectionEffectLabelframe.grid_rowconfigure((0,1,2,3,4,5,6,7),weight=1)
 fireMissionSelectionEffectDestroyRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Destroy",variable=fireMissionEffect,value="Destroy")
 fireMissionSelectionEffectNeutraliseRadio = ttk.Radiobutton(fireMissionSelectionEffectLabelframe,text="Neutralise",variable=fireMissionEffect,value="Neutralise")
@@ -3488,22 +3547,41 @@ fireMissionMinute.set(datetime.now().strftime("%M"))
 fireMissionSelectionTimeColonLabel2 = ttk.Label(fireMissionSelectionTimeLabelframe,text=" : ")
 fireMissionSelectionTimeSecondsEntry = ttk.Entry(fireMissionSelectionTimeLabelframe,width=2,textvariable=fireMissionSecond,justify="center")
 fireMissionSecond.set(datetime.now().strftime("%S"))
-fireMissionSelectionPairedEffectLabelframe = ttk.Labelframe(fireMissionSelectionLabelframe,text="Paired Effect")
-fireMissionSelectionPairedEffectLabelframe.grid_columnconfigure((0,1,2,3),weight=1)
-fireMissionSelectionPairedEffectLabelframe.grid_rowconfigure((0,1,2,3),weight=1)
-fireMissionSelectionPairedEffectLineRadio = ttk.Radiobutton(fireMissionSelectionPairedEffectLabelframe,text="Line",variable=fireMissionPairedEffect,value="Line")
-fireMissionSelectionPairedEffectELineRadio = ttk.Radiobutton(fireMissionSelectionPairedEffectLabelframe,text="Explicit Line",variable=fireMissionPairedEffect,value="Explicit_Line")
-fireMissionSelectionPairedEffectCreepingRadio = ttk.Radiobutton(fireMissionSelectionPairedEffectLabelframe,text="Creeping Barrage",variable=fireMissionPairedEffect,value="Creeping_Barrage")
-fireMissionSelectionPairedEffectCreepingLabelframe = ttk.Labelframe(fireMissionSelectionLabelframe,text="Width")
-fireMissionSelectionPairedEffectCreepingLabelframe.grid_columnconfigure(0,weight=1)
-fireMissionSelectionPairedEffectCreepingLabelframe.grid_columnconfigure(1)
-fireMissionSelectionPairedEffectCreepingLabelframe.grid_rowconfigure(0,weight=1)
-fireMissionSelectionPairedEffectCreepingCombobox = ttk.Combobox(fireMissionSelectionPairedEffectCreepingLabelframe,justify="center",width=3,values=(100,150,200,250,300))
-fireMissionSelectionPairedEffectCreepingUnitLabel = ttk.Label(fireMissionSelectionPairedEffectCreepingLabelframe,text="m",justify="left")
-fireMissionSelectionPairedEffectSeriesRadio = ttk.Radiobutton(fireMissionSelectionPairedEffectLabelframe,text="Series",variable=fireMissionPairedEffect,value="Series")
-fireMissionPairedEffect.set("-1")
-fireMissionPairedEffect.trace_add(mode="write", callback = PairedMissionChange)
-fireMissionSelectionPairedEffectAddButton = ttk.Button(fireMissionSelectionPairedEffectLabelframe,width=3,text="Add\nPaired\nMission",command=AddPairedMission)
+fireMissionGroupSelectionLabelframe = ttk.Labelframe(pane22,text="Grouped Fire Mission Selection",padding=3)
+fireMissionGroupSelectionLabelframe.grid_columnconfigure((0,1,2,3),weight=1)
+fireMissionGroupSelectionLabelframe.grid_rowconfigure((0,1,2,3),weight=1)
+fireMissionGroupSelectionTargetFrame = ttk.Frame(fireMissionGroupSelectionLabelframe,padding=3,relief="raised")
+fireMissionGroupSelectionTargetFrame.bind("<Button-3>",ReverseFireMissionGroupSelections)
+fireMissionGroupSelection1Label = ttk.Label(fireMissionGroupSelectionTargetFrame,text="Target 1 : ")
+fireMissionGroupSelection2Label = ttk.Label(fireMissionGroupSelectionTargetFrame,text="Target 2 : ")
+fireMissionGroupSelection1NameLabel = ttk.Label(fireMissionGroupSelectionTargetFrame)
+fireMissionGroupSelection2NameLabel = ttk.Label(fireMissionGroupSelectionTargetFrame)
+fireMissionGroupSelection1Label.bind("<Button-3>",ReverseFireMissionGroupSelections)
+fireMissionGroupSelection2Label.bind("<Button-3>",ReverseFireMissionGroupSelections)
+fireMissionGroupSelection1NameLabel.bind("<Button-3>",ReverseFireMissionGroupSelections)
+fireMissionGroupSelection2NameLabel.bind("<Button-3>",ReverseFireMissionGroupSelections)
+fireMissionGroupSelectionReverseButton = ttk.Button(fireMissionGroupSelectionLabelframe,text="Reverse\n Targets",command=lambda:ReverseFireMissionGroupSelections())
+fireMissionGroupSelectionAddButton = ttk.Button(fireMissionGroupSelectionLabelframe,text="Add\nGroup",command=lambda:AddGroupMission())
+fireMissionGroupSelectionEffectLabelFrame = ttk.LabelFrame(fireMissionGroupSelectionLabelframe,text="Group Effect",relief="groove",padding=3)
+fireMissionGroupSelectionEffectLine = ttk.Radiobutton(fireMissionGroupSelectionEffectLabelFrame,text="Line",variable=fireMissionGroupEffect,value="Line")
+fireMissionGroupSelectionEffectExplicitLine = ttk.Radiobutton(fireMissionGroupSelectionEffectLabelFrame,text="Explicit Line",variable=fireMissionGroupEffect,value="Explicit Line")
+fireMissionGroupSelectionEffectCreepingBarrage = ttk.Radiobutton(fireMissionGroupSelectionEffectLabelFrame,text="Creeping Barrage",variable=fireMissionGroupEffect,value="Creeping Barrage")
+fireMissionGroupEffect.set("Line")
+fireMissionGroupEffect.trace_add(mode="write",callback=lambda *args:FireMissionGroupEffectChange())
+fireMissionGroupSelectionDispersionLabelframe = ttk.Labelframe(fireMissionGroupSelectionLabelframe,text="Dispersion",padding=3)
+fireMissionGroupSelectionDispersionLabelframe.grid_columnconfigure(0,weight=1)
+fireMissionGroupSelectionDispersionLabelframe.grid_columnconfigure(1,minsize=20)
+fireMissionGroupSelectionDispersionLabelframe.grid_columnconfigure(2,minsize=9)
+fireMissionGroupSelectionDispersionLabelframe.grid_rowconfigure((0,1),weight=1)
+fireMissionGroupSelectionDispersionSpacingLabel = ttk.Label(fireMissionGroupSelectionDispersionLabelframe,text="Spacing")
+fireMissionGroupSelectionDispersionSpacingCombobox = ttk.Combobox(fireMissionGroupSelectionDispersionLabelframe,justify="center",width=5,textvariable=fireMissionGroupSpacing,values=("10","20","30","40","50","60","70","80","90","100"))
+fireMissionGroupSpacing.set("30")
+fireMissionGroupSelectionDispersionSpacingUnitLabel = ttk.Label(fireMissionGroupSelectionDispersionLabelframe,text="m")
+fireMissionGroupSelectionDispersionWidthLabel = ttk.Label(fireMissionGroupSelectionDispersionLabelframe,text="Width")
+fireMissionGroupSelectionDispersionWidthCombobox = ttk.Combobox(fireMissionGroupSelectionDispersionLabelframe,justify="center",width=5,textvariable=fireMissionGroupWidth,values=("100","150","200","250","300","350","400"))
+fireMissionGroupWidth.set("150")
+fireMissionGroupSelectionDispersionWidthUnitLabel = ttk.Label(fireMissionGroupSelectionDispersionLabelframe,text="m")
+
 pane2pane.add(pane23,weight=1)
 
 #CLOCK
@@ -3599,12 +3677,12 @@ targetListPanedwindow = ttk.Panedwindow(targetListFrame,orient="vertical")
 targetListPanedwindowLRFrame = ttk.Frame(targetListPanedwindow,padding="5")
 targetListPanedwindowXYFrame = ttk.Frame(targetListPanedwindow,padding="5")
 targetListPanedwindowFPFFrame = ttk.Frame(targetListPanedwindow,padding="5")
-targetListPanedwindowComboFrame = ttk.Frame(targetListPanedwindow,padding="5")
+targetListPanedwindowGroupFrame = ttk.Frame(targetListPanedwindow,padding="5")
 targetListPanedwindowEmptyFrame = ttk.Frame(targetListPanedwindow,padding="5")
 targetListPanedwindow.add(targetListPanedwindowLRFrame,weight=1)
 targetListPanedwindow.add(targetListPanedwindowXYFrame,weight=1)
 targetListPanedwindow.add(targetListPanedwindowFPFFrame,weight=1)
-targetListPanedwindow.add(targetListPanedwindowComboFrame,weight=1)
+targetListPanedwindow.add(targetListPanedwindowGroupFrame,weight=1)
 targetListPanedwindow.add(targetListPanedwindowEmptyFrame,weight=0)
 targetListPanedwindowLRFrame.grid_columnconfigure(0)
 targetListPanedwindowLRFrame.grid_rowconfigure(0,weight=1)
@@ -3612,8 +3690,8 @@ targetListPanedwindowXYFrame.grid_columnconfigure(0)
 targetListPanedwindowXYFrame.grid_rowconfigure(0,weight=1)
 targetListPanedwindowFPFFrame.grid_columnconfigure(0)
 targetListPanedwindowFPFFrame.grid_rowconfigure(0,weight=1)
-targetListPanedwindowComboFrame.grid_columnconfigure(0)
-targetListPanedwindowComboFrame.grid_rowconfigure(0,weight=1)
+targetListPanedwindowGroupFrame.grid_columnconfigure(0)
+targetListPanedwindowGroupFrame.grid_rowconfigure(0,weight=1)
 
 targetContextMenu = Menu(root,tearoff=False)
 targetListLRLabelframe = ttk.Labelframe(targetListPanedwindowLRFrame,text="LR",padding=5,relief="groove")
@@ -3652,16 +3730,15 @@ targetListFPFScrollbar.pack(side="right", fill="y")
 sortedFPFItems = Sort_FireMissions(listCheckBox_vars["FPF"])
 
 
-targetListComboLabelframe = ttk.Labelframe(targetListPanedwindowComboFrame,text="Grouped",padding=5,relief="groove")
-targetListComboCanvas = Canvas(targetListComboLabelframe,bg="white",height=120)
-targetListComboCanvasFrame = ttk.Frame(targetListComboCanvas, padding=10)
-targetListComboCanvas.create_window((0, 0), window=targetListComboCanvasFrame, anchor="nw")
-targetListComboScrollbar = ttk.Scrollbar(targetListComboLabelframe, orient="vertical", command=targetListComboCanvas.yview)
-targetListComboCanvas.configure(yscrollcommand=targetListComboScrollbar.set)
-targetListComboCanvas.pack(side="left", fill="both", expand=True)
-targetListComboLabelframe.grid(row=0, column=0, sticky="nsew")
-targetListComboScrollbar.pack(side="right", fill="y")
-sortedComboItems = Sort_FireMissions(listCheckBox_vars["Combo"])
+targetListGroupLabelframe = ttk.Labelframe(targetListPanedwindowGroupFrame,text="Group",padding=5,relief="groove")
+targetListGroupCanvas = Canvas(targetListGroupLabelframe,bg="white",height=120)
+targetListGroupCanvasFrame = ttk.Frame(targetListGroupCanvas, padding=10)
+targetListGroupCanvas.create_window((0, 0), window=targetListGroupCanvasFrame, anchor="nw")
+targetListGroupScrollbar = ttk.Scrollbar(targetListGroupLabelframe, orient="vertical", command=targetListGroupCanvas.yview)
+targetListGroupCanvas.configure(yscrollcommand=targetListGroupScrollbar.set)
+targetListGroupCanvas.pack(side="left", fill="both", expand=True)
+targetListGroupLabelframe.grid(row=0, column=0, sticky="nsew")
+targetListGroupScrollbar.pack(side="right", fill="y")
 
 
 pane3pane.add(pane32)
@@ -3724,7 +3801,6 @@ fmEditSafetyToggle.trace_add(mode="write",callback=RequestEditFireMissionsFromSa
 create_checkboxes(targetListLRCanvasFrame, {key: listCheckBox_vars["LR"][key] for key in sortedLRItems},seriesDict["LR"])
 create_checkboxes(targetListXYCanvasFrame, {key: listCheckBox_vars["XY"][key] for key in sortedXYItems},seriesDict["XY"])
 create_checkboxes(targetListFPFCanvasFrame, {key: listCheckBox_vars["FPF"][key] for key in sortedFPFItems},seriesDict["FPF"],True)
-create_checkboxes(targetListComboCanvasFrame, {key: listCheckBox_vars["Combo"][key] for key in sortedComboItems},seriesDict["Combo"])
 resetSafety = StringVar()
 reset_menu = Menu(menubar,tearoff=False)
 reset_firemission_menu = Menu(reset_menu,tearoff=False)
@@ -3899,16 +3975,29 @@ fireMissionSelectionTimeColonLabel1.grid(column="1",row="0",sticky="NEW")
 fireMissionSelectionTimeMinutesEntry.grid(column="2",row="0",sticky="NEW")
 fireMissionSelectionTimeColonLabel2.grid(column="3",row="0",sticky="NEW")
 fireMissionSelectionTimeSecondsEntry.grid(column="4",row="0",sticky="NEW")
-fireMissionSelectionPairedEffectLabelframe.grid(column="0",row="3",columnspan=4,sticky="NEW",padx=4)
-fireMissionSelectionPairedEffectLabelframe.grid_remove()
-fireMissionSelectionPairedEffectLineRadio.grid(column="1",row="0",sticky="NEW")
-fireMissionSelectionPairedEffectELineRadio.grid(column="1",row="1",sticky="NEW")
-fireMissionSelectionPairedEffectCreepingRadio.grid(column="1",row="2",sticky="NEW")
-fireMissionSelectionPairedEffectSeriesRadio.grid(column="1",row="3",sticky="NEW")
-fireMissionSelectionPairedEffectCreepingLabelframe.grid(column="2",row="2",sticky="EW",padx=4,pady=2)
-fireMissionSelectionPairedEffectCreepingCombobox.grid(column="0",row="0",sticky="EW")
-fireMissionSelectionPairedEffectCreepingUnitLabel.grid(column="1",row="0",sticky="W")
-fireMissionSelectionPairedEffectAddButton.grid(column="3",row="0",rowspan=4,sticky="EW")
+fireMissionGroupSelectionLabelframe.grid(column="0",row="1",sticky="NW")
+fireMissionGroupSelectionTargetFrame.grid(column="0",row="0",rowspan="3",sticky="NESW",padx=4)
+fireMissionGroupSelection1Label.grid(column="0",row="0",sticky="NW")
+fireMissionGroupSelection2Label.grid(column="0",row="1",sticky="NW")
+fireMissionGroupSelection1NameLabel.grid(column="1",row="0",sticky="NW")
+fireMissionGroupSelection2NameLabel.grid(column="1",row="1",sticky="NW")
+fireMissionGroupSelectionLabelframe.grid_remove()
+fireMissionGroupSelectionReverseButton.grid(column="1",row="0",rowspan=3,sticky="NW",padx="3")
+fireMissionGroupSelectionAddButton.grid(column="2",row="0",rowspan=3,sticky="NW",padx="3")
+fireMissionGroupSelectionEffectLabelFrame.grid(column="0",row="3",sticky="NW",padx="3")
+fireMissionGroupSelectionEffectLine.grid(column="0",row="0",sticky="NW")
+fireMissionGroupSelectionEffectExplicitLine.grid(column="0",row="1",sticky="NW")
+fireMissionGroupSelectionEffectCreepingBarrage.grid(column="0",row="2",sticky="NW")
+fireMissionGroupSelectionDispersionLabelframe.grid(column="1",row="3",columnspan=2,sticky="NESW",padx="3")
+fireMissionGroupSelectionDispersionSpacingLabel.grid(column="0",row="0",sticky="NE")
+fireMissionGroupSelectionDispersionSpacingCombobox.grid(column="1",row="0",sticky="NEW",pady="3")
+fireMissionGroupSelectionDispersionSpacingUnitLabel.grid(column="2",row="0",sticky="NW")
+fireMissionGroupSelectionDispersionWidthLabel.grid(column="0",row="1",sticky="NE")
+fireMissionGroupSelectionDispersionWidthCombobox.grid(column="1",row="1",sticky="NEW",pady="3")
+fireMissionGroupSelectionDispersionWidthUnitLabel.grid(column="2",row="1",sticky="NW")
+fireMissionGroupSelectionDispersionWidthLabel.grid_remove()
+fireMissionGroupSelectionDispersionWidthCombobox.grid_remove()
+fireMissionGroupSelectionDispersionWidthUnitLabel.grid_remove()
 
 clockNotesNotebook.grid(column="0",row="0",sticky="NEW")
 clockCanvas.grid(column="0",row="0",sticky="NW")
@@ -3944,7 +4033,6 @@ statusGridLabel.grid(column="1",row="0",sticky="EW")
 statusHeightLabel.grid(column="2",row="0",sticky="E")
 statusProgressBar.grid(column="2",row="0",sticky="EW")
 fireMissionSelectionTimeLabelframe.grid_remove()
-fireMissionSelectionPairedEffectCreepingLabelframe.grid_remove()
 
 idfpNotebook.grid(column="0",row="0", sticky="NESW")
 
