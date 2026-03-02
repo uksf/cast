@@ -6,10 +6,25 @@ a = Analysis(
     binaries=[],
     datas=[
         ('Functions/ArtilleryFunctions.py','Functions'),
-        ('Functions/uksf.ico','Functions'),
-        ('Functions/statuslog.ico','Functions'),
-        ('Functions/edit.png','Functions'),
-        ('Functions/calc.png','Functions'),
+        ('Functions/MapFunctions.py','Functions'),
+        ('Functions/JsonFunctions.py','Functions'),
+        ('Functions/UI_Components.py','Functions'),
+        ('Functions/icons/uksf.ico','Functions/icons'),
+        ('Functions/icons/statuslog.ico','Functions/icons'),
+        ('Functions/icons/clock.ico','Functions/icons'),
+        ('Functions/icons/settings.ico','Functions/icons'),
+        ('Functions/icons/scope.ico','Functions/icons'),
+        ('Functions/icons/terrain.ico','Functions/icons'),
+        ('Functions/icons/popout.png','Functions/icons'),
+        ('Functions/icons/dropdown.png','Functions/icons'),
+        ('Functions/icons/edit.png','Functions/icons'),
+        ('Functions/icons/calc.png','Functions/icons'),
+        ('Functions/icons/FPF.png','Functions/icons'),
+        ('Functions/icons/LR.png','Functions/icons'),
+        ('Functions/icons/XY.png','Functions/icons'),
+        ('Functions/icons/snapshot.png','Functions/icons'),
+        ('Functions/icons/reference points.png','Functions/icons'),
+        ('Functions/icons/marker settings.png','Functions/icons'),
         ('Functions/ArtilleryConfigs.json','Functions'),
         ('Functions/polynomial/*','Functions/polynomial')
     ],
@@ -45,5 +60,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='Functions/uksf.ico'  # This sets the exe icon
+    icon='Functions/icons/uksf.ico'  # This sets the exe icon
 )
