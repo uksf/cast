@@ -769,6 +769,22 @@ class MapMarking():
                 bounds = mpatches.Wedge(origin,r=range+height,width=length,theta1=direction - halfangle,theta2=direction + halfangle,linestyle=style,linewidth=self.size,edgecolor = colour,fill = False)
             self.axArtist = self.ax.add_artist(bounds)
             return self.axArtist
+    def NATOStandards(self,force : Literal["BLUFOR","OPFOR","Civilian"],colour: str | None,*args,**kwargs):
+        for setting,value in kwargs.items():
+            setattr(self,setting,value)
+        drawArea = DrawingArea(self.size+10,self.size+10,0,0)
+        if force == "BLUFOR":
+            outerRim = mpatches.Rectangle((-self.size/2,-self.size/1.5),self.size,self.size*0.75)
+            if "tracked" in args:
+                None
+        elif force == "OPFOR":
+            outerRim = mpatches.Rectangle((-self.size/2,-self.size/2),self.size,self.size,angle=45,rotation_point="center")
+        elif force == "Civilian":
+            outerRim = mpatches.Rectangle((-self.size/2,-self.size/2),self.size,self.size)
+        
+        
+        
+        None
 
 class MarkerSettings():
     def __init__(self,**kwargs):
@@ -1271,6 +1287,13 @@ class CustomToolbar(NavigationToolbar2Tk):
                 self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to load JSON: {str(e)}")
         for markInList in markerList:
             threading.Thread(target=lambda mark = markInList: FetchMarker(mark),daemon=True).start()
+            # if hasattr(self,"thread"):
+            #     if not self.thread.is_alive():
+            #         self.thread = threading.Thread(target=lambda mark = markInList: FetchMarker(mark),daemon=True)
+            #         self.thread.start()
+            # else:
+            #     self.thread = threading.Thread(target=lambda mark = markInList: FetchMarker(mark),daemon=True)
+            #     self.thread.start()
         if marker is None:
             self.mainWidget.markerUpdateEvent = self.root.after(self.mainWidget.mapDelay,self.MapUpdate)
     def _Button(self, text, image_file, toggle, command):
@@ -2141,42 +2164,49 @@ class ToolbarContextWindow():
 
         def CalculatePressed():
             if len(snapshotIDFPCreation.idfpListbox.curselection()) != 0:
-                IDFPDict = self.toolbar.UIMaster.castJson.Load(source=JsonSource.IDFP)
-                IDFP = list(IDFPDict.keys())[snapshotIDFPCreation.idfpListbox.curselection()[0]]
-                solution = self.toolbar.UIMaster.target.CalculateSnapshot(IDFPDict,IDFP,np.ceil(float(self.fireMissionWidth.get())), np.ceil(float(self.fireMissionDepth.get())),self.snapPosX.get(),self.snapPosY.get(),float(self.snapHeight.get()),float(self.airTemperature.get()),float(self.airHumidity.get()),float(self.airPressure.get()),float(self.windDirection.get()),float(self.windMagnitude.get()),int(self.windDynamic.get()))
                 try:
-                    if int(np.round(float(self.fireMissionDepth))) >= 1:
-                        range = "{:04d} ± {} m".format(int(solution["Range"]), int(np.round(float(self.fireMissionDepth))))
-                except:
-                    range = "{:04d} m".format(int(solution["Range"]))
-                try:vertex = int(np.ceil(list(solution["Vertex"])[2]/5)*5)
-                except:vertex = solution["Vertex"]
-                if self.windDynamic.get() == "1":
-                    windCorrections = "± {} mils\n± {} mils".format(int(np.round(float(solution["PerpendicularCorrection"]))),int(np.round(float(solution["ParallelCorrection"]))))
-                else:
-                    windCorrections = "\n"
-                try:
-                    if float(self.fireMissionWidth.get()) >=1:
-                        azimuthDeviation = solution["Azimuth"]-solution["Left"] if (solution["Azimuth"]-solution["Left"]) > 0 else (solution["Azimuth"]-solution["Left"])+2*np.pi
-                        azimuth = "{:06.1f} ± {} mils\n\t⇐ {:04d} | {:04d} ⇒".format(solution["Azimuth"]*3200/np.pi,np.round(azimuthDeviation*3200/np.pi),int(np.round(solution["Left"]*3200/np.pi)),int(np.round(solution["Left"]*3200/np.pi)))
+                    calculateButton.config(state="disabled")
+                    IDFPDict = self.toolbar.UIMaster.castJson.Load(source=JsonSource.IDFP)
+                    IDFP = list(IDFPDict.keys())[snapshotIDFPCreation.idfpListbox.curselection()[0]]
+                    solution = self.toolbar.UIMaster.target.CalculateSnapshot(IDFPDict,IDFP,np.ceil(float(self.fireMissionWidth.get())), np.ceil(float(self.fireMissionDepth.get())),self.snapPosX.get(),self.snapPosY.get(),float(self.snapHeight.get()),float(self.airTemperature.get()),float(self.airHumidity.get()),float(self.airPressure.get()),float(self.windDirection.get()),float(self.windMagnitude.get()),int(self.windDynamic.get()))
+                    try:
+                        if int(np.round(float(self.fireMissionDepth))) >= 1:
+                            range = "{:04d} ± {} m".format(int(solution["Range"]), int(np.round(float(self.fireMissionDepth))))
+                    except:
+                        range = "{:04d} m".format(int(solution["Range"]))
+                    try:vertex = int(np.ceil(list(solution["Vertex"])[2]/5)*5)
+                    except:vertex = solution["Vertex"]
+                    if self.windDynamic.get() == "1":
+                        windCorrections = "± {} mils\n± {} mils".format(int(np.round(float(solution["PerpendicularCorrection"]))),int(np.round(float(solution["ParallelCorrection"]))))
                     else:
+                        windCorrections = "\n"
+                    try:
+                        if float(self.fireMissionWidth.get()) >=1:
+                            azimuthDeviation = solution["Azimuth"]-solution["Left"] if (solution["Azimuth"]-solution["Left"]) > 0 else (solution["Azimuth"]-solution["Left"])+2*np.pi
+                            azimuth = "{:06.1f} ± {} mils\n\t⇐ {:04d} | {:04d} ⇒".format(solution["Azimuth"]*3200/np.pi,np.round(azimuthDeviation*3200/np.pi),int(np.round(solution["Left"]*3200/np.pi)),int(np.round(solution["Right"]*3200/np.pi)))
+                        else:
+                            azimuth = "{:06.1f} mils\n".format(solution["Azimuth"]*3200/np.pi)
+                    except:
                         azimuth = "{:06.1f} mils\n".format(solution["Azimuth"]*3200/np.pi)
-                except:
-                    azimuth = "{:06.1f} mils\n".format(solution["Azimuth"]*3200/np.pi)
-                try:
-                    if float(self.fireMissionDepth.get()) >=1:
-                        elevation = "{:06.1f} ± {} mils\n⇓ {:04d} | {:04d} ⇑".format(solution["Elevation"],int(np.round(solution["Near"])),int(np.round(solution["Far"])))
-                    else:
+                    try:
+                        if float(self.fireMissionDepth.get()) >=1:
+                            elevation = "{:06.1f} ± {} mils\n⇓ {:04d} | {:04d} ⇑".format(solution["Elevation"],int(np.round(solution["Near"])),int(np.round(solution["Far"])))
+                        else:
+                            elevation = "{:06.1f} mils\n".format(solution["Elevation"])
+                    except:
                         elevation = "{:06.1f} mils\n".format(solution["Elevation"])
-                except:
-                    elevation = "{:06.1f} mils\n".format(solution["Elevation"])
-                outputSolution.config(text="{}\n{}\n{}\n{}\n{:0.1f}\nFL {}\n{}\n{}\n{}".format(solution["System"],IDFPDict[IDFP]["Trajectory"],range,solution["Charge"],float(solution["TOF"]),vertex,windCorrections,azimuth,elevation))
+                        print("{}\n{}\n{}\n{}\n{:0.1f}\nFL {}\n{:0.1f}° {:0.1f} m/s\n{}\n{}\n{}".format(solution["System"],IDFPDict[IDFP]["Trajectory"],range,solution["Charge"],float(solution["TOF"]),vertex,solution["ImpactAngle"],solution["ImpactSpeed"],windCorrections,azimuth,elevation))
+                    outputSolution.config(text="{}\n{}\n{}\n{}\n{:0.1f}\nFL {}\n{:0.1f}° {:0.1f} m/s\n{}\n{}\n{}".format(solution["System"],IDFPDict[IDFP]["Trajectory"],range,solution["Charge"],float(solution["TOF"]),vertex,solution["ImpactAngle"],solution["ImpactSpeed"],windCorrections,azimuth,elevation))
+                except Exception as e: self.toolbar.UIMaster.StatusMessageErrorDump(e,errorMessage="Failed to calculate snapshot")
+                finally:
+                    calculateButton.config(state="normal")
+                    self.frame.bell()
         inputLabelframe = ttk.LabelFrame(self.frame,text="Snapshot settings",padding=5)
         inputLabelframe.grid_columnconfigure((0),weight=1)
         outputLabelframe = ttk.LabelFrame(self.frame,text="Firing solution",padding=5)
         inputSeparator2 = ttk.Separator(inputLabelframe,orient="vertical")
         outputSeparator = ttk.Separator(outputLabelframe,orient="vertical")
-        outputLabels = ttk.Label(outputLabelframe,text="System\nTrajectory\nRange\nCharge\nTOF\nVertex\nCrosswind\nHead/Tailwind\nAzimuth\n\nElevation\n\n",justify="right",padding=3)
+        outputLabels = ttk.Label(outputLabelframe,text="System\nTrajectory\nRange\nCharge\nTOF\nVertex\nImpact\nCrosswind\nHead/Tailwind\nAzimuth\n\nElevation\n\n",justify="right",padding=3)
         outputSolution = ttk.Label(outputLabelframe,justify="left",padding=3)
         idfpLabelframe = ttk.Labelframe(inputLabelframe,text="IDFP")
         idfpLabelframe.columnconfigure(0,weight=1)

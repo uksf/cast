@@ -2,6 +2,7 @@ from enum import IntEnum
 from pathlib import Path
 import json
 import requests
+import ast
 
 class JsonType(IntEnum):
     LOCAL = 0
@@ -17,9 +18,9 @@ class JsonSource(IntEnum):
     ARTILLERYCONFIG = 6
 
 class CastJson():
-    def __init__(self,jsonType: JsonType,StatusMessageErrorDump,exeDir: Path,appData_local: Path | None = None,):
+    def __init__(self,jsonType: JsonType,UIMaster,exeDir: Path,appData_local: Path | None = None,):
         self.jsonType = jsonType
-        self.StatusMessageErrorDump = StatusMessageErrorDump
+        self.UIMaster = UIMaster
         self.exeDir = exeDir
         self.appData_local = appData_local
         """
@@ -31,14 +32,20 @@ class CastJson():
         #     self.appData_local = appData_local
         # elif self.jsonType == JsonType.SERVER:
         #     self.authToken = None
-    def GetStatusMessageErrorDump(self,StatusMessageErrorDump):
-        self.StatusMessageErrorDump = StatusMessageErrorDump
     def SyncAuthToken(self,authToken):
         self.authToken=authToken
         if authToken is not None:
             self.jsonType = JsonType.SERVER
         else: self.jsonType = JsonType.LOCAL
-    def Load(self,source: JsonSource,localOverride = False) -> dict | str:
+
+    def _requestHandle(self,jsonName:str):
+        response = requests.get(url=f"https://api.uk-sf.co.uk/artillery/{jsonName}",headers={"Authorization":"Bearer " + self.authToken["token"]})
+        if response.status_code!= 200:
+            return f"{response.status_code}: {response.reason}"
+        else:
+            jsonFile = ast.literal_eval(response.json()["data"])
+            return jsonFile
+    def Load(self,source: JsonSource,localOverride = False,requestedSave = False) -> dict | str:
         """
         Loads and returns the Json data from the specified source. Takes the "json" arguement and uses the appropriate json source
         """
@@ -101,26 +108,33 @@ class CastJson():
                         with open(self.appData_local/"UKSF"/"CAST"/"Message_Log.json",mode="w") as f:
                             json.dump({"message":""},f,indent=4)
                     except: None
-                    self.StatusMessageErrorDump(e, errorMessage="Failed to load Message log, returning nothing")
-                    return {}
+                    return ""
                 else: source = "Artillery Configurations"
-                self.StatusMessageErrorDump(e, errorMessage=f"Failed to load {source}, returning nothing")
-                return ""
+                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to load {source}, returning nothing")
+                return {}
                 
         elif self.jsonType ==JsonType.SERVER:
             try:
                 if source == JsonSource.COMMON:
-                    return json.loads(requests.get(url="https://api.uk-sf.co.uk/artillery/common",headers={"Authorization":"Bearer " + self.authToken["token"]}).json()["data"].translate(str.maketrans({"'": '"','"':"'"})))
+                    sourceJson = self._requestHandle("common")
                 elif source == JsonSource.IDFP:
-                    return json.loads(requests.get(url="https://api.uk-sf.co.uk/artillery/idfp",headers={"Authorization":"Bearer " + self.authToken["token"]}).json()["data"].translate(str.maketrans({"'": '"','"':"'"})))
+                    sourceJson = self._requestHandle("idfp")
                 elif source == JsonSource.FRIENDLY:
-                    return json.loads(requests.get(url="https://api.uk-sf.co.uk/artillery/friendly",headers={"Authorization":"Bearer " + self.authToken["token"]}).json()["data"].translate(str.maketrans({"'": '"','"':"'"})))
+                    sourceJson = self._requestHandle("friendly")
                 elif source == JsonSource.TARGET:
-                    return json.loads(requests.get(url="https://api.uk-sf.co.uk/artillery/target",headers={"Authorization":"Bearer " + self.authToken["token"]}).json()["data"].translate(str.maketrans({"'": '"','"':"'"})))
+                    sourceJson = self._requestHandle("target")
                 elif source == JsonSource.FIREMISSION:
-                    return json.loads(requests.get(url="https://api.uk-sf.co.uk/artillery/fireMissions",headers={"Authorization":"Bearer " + self.authToken["token"]}).json()["data"].translate(str.maketrans({"'": '"','"':"'"})))
+                    sourceJson = self._requestHandle("fireMissions")
                 elif source == JsonSource.MESSAGELOG:
-                    return str(json.loads(requests.get(url="https://api.uk-sf.co.uk/artillery/message_log",headers={"Authorization":"Bearer " + self.authToken["token"]}).json()["data"].translate(str.maketrans({"'": '"','"':"'"})))["message"])
+                    sourceJson = self._requestHandle("message_log")
+                if type(sourceJson) != str:
+                    if source is JsonSource.MESSAGELOG:
+                        return sourceJson["message"]
+                    else: return sourceJson
+                else:
+                    self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to load {source} due to {sourceJson}, returning nothing",localOverride=True)
+                    if requestedSave:
+                        return requests.RequestException
             except Exception as e:
                 if source == JsonSource.COMMON: source = "Common parameters"
                 elif source == JsonSource.IDFP: source = "IDFP position data"
@@ -128,11 +142,11 @@ class CastJson():
                 elif source == JsonSource.TARGET: source = "Target position data"
                 elif source == JsonSource.FIREMISSION: source = "Fire mission data"
                 elif source == JsonSource.MESSAGELOG:
-                    self.StatusMessageErrorDump(e, errorMessage="Failed load Message log, returning nothing")
-                    return {}
+                    self.UIMaster.StatusMessageErrorDump(e, errorMessage="Failed load Message log, returning nothing",localOverride=True)
+                    return ""
                 else: source = "Artillery Configurations"
-                self.StatusMessageErrorDump(e, errorMessage=f"Failed load {source}, returning nothing")
-                return ""
+                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed load {source}, returning nothing",localOverride=True)
+                return {}
             
     def Save(self,source: JsonSource,newEntry: dict | str, append = True,localOverride = False) -> bool:
         """
@@ -141,11 +155,18 @@ class CastJson():
         data = {}
         if append:
             if source !=JsonSource.MESSAGELOG:
-                try: data = (self.Load(source,localOverride) | newEntry)
+                try:
+                    dataLoad = self.Load(source,localOverride,requestedSave=True)
+                    if dataLoad is not requests.RequestException:
+                        data = (dataLoad | newEntry)
+                    else: return False
                 except TypeError: None
             else:
                 try:
-                    message = self.Load(source,localOverride) + str(newEntry)
+                    dataLoad = self.Load(source,localOverride,requestedSave=True)
+                    if dataLoad is not requests.RequestException:
+                        message = dataLoad + str(newEntry)
+                    else: return False
                 except TypeError:
                     message = ""
                 data["message"] = message
@@ -181,7 +202,7 @@ class CastJson():
                 elif source == 4: source = "Fire mission data"
                 elif source == 5: source = "Message log"
                 else: source = "Artillery Configurations"
-                self.StatusMessageErrorDump(e, errorMessage=f"Failed to save {source}, returning False")
+                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to save {source}, returning False")
                 return False
         elif self.jsonType ==JsonType.SERVER:
             try:
@@ -205,7 +226,7 @@ class CastJson():
                 elif source == JsonSource.FIREMISSION: source = "Fire mission data"
                 elif source == JsonSource.MESSAGELOG: source = "Message log"
                 else: source = "Artillery Configurations"
-                self.StatusMessageErrorDump(e, errorMessage=f"Failed to save {source}, returning False")
+                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to save {source}, returning False",localOverride=True)
                 return False
     def Delete(self,source:JsonSource, deleteKey: str | list | tuple | None = None, localOverride = False) -> bool:
         """
@@ -231,13 +252,13 @@ class CastJson():
                 elif source == JsonSource.FIREMISSION: source = "Fire mission data"
                 elif source == JsonSource.MESSAGELOG: source = "Message log"
                 else: source = "Artillery Configurations"
-                self.StatusMessageErrorDump(e, errorMessage=f"Failed to delete {source}, returning False")
+                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to delete {source}, returning False")
                 return False
         
 
 class UksfAccounts():
-    def __init__(self,StatusMessageErrorDump):
-        self.StatusMessageErrorDump = StatusMessageErrorDump
+    def __init__(self,UIMaster):
+        self.UIMaster = UIMaster
         self.authToken = None
     def GetAuthToken(self,email:str, password:str) -> str:
         self.authToken = requests.post(url="https://api.uk-sf.co.uk/auth/login",json={"email" : email.strip(), "password" : password}).json()
@@ -253,7 +274,7 @@ class UksfAccounts():
                 if castJson is CastJson:
                     castJson.SyncAuthToken(None)
                 return authToken["error"]
-            except Exception as e: self.StatusMessageErrorDump(e,"Failed to produce login error")
+            except Exception as e: self.UIMaster.StatusMessageErrorDump(e,"Failed to produce login error")
             return None
         else: return account
     def SaveAuthTokenLocal(self,appData_local,authToken: dict | None = None) -> None:
@@ -266,7 +287,7 @@ class UksfAccounts():
             with open(file=appData_local/"UKSF"/"CAST"/"auth.json",mode="r") as file:
                 self.authToken = json.loads(file.read())
             account = requests.get(url="https://api.uk-sf.co.uk/accounts",headers={"Authorization":"Bearer " + self.authToken["token"]}).json()
-            account["displayName"]
+            self.UIMaster.user = account["displayName"]
         except:
             return None
         else:
