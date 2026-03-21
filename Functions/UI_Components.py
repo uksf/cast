@@ -5,6 +5,7 @@ from typing import Literal
 import numpy as np
 import re
 import pyperclip
+import threading
 from pathlib import Path
 from collections import Counter
 from datetime import datetime, timezone
@@ -261,7 +262,7 @@ class IDFPCreation(UIComponentBase):
 
     def InitialiseIDFPList(self):
         try:
-            oldLoadedIDFPs = list(self.UIMaster.castJson.Load(source=JsonSource.IDFP).keys())
+            oldLoadedIDFPs = list(self.UIMaster.oldLoaded[JsonSource.IDFP].keys())
             self.idfpListBoxContents.set(oldLoadedIDFPs)
             self.idfpNameCombobox.config(values = oldLoadedIDFPs)
         except Exception as e:
@@ -303,7 +304,7 @@ class IDFPCreation(UIComponentBase):
                         "Trajectory" : traj
                     }
                 }
-                try: self.UIMaster.castJson.Load(source=JsonSource.IDFP)[self.idfpName.get()]
+                try: self.UIMaster.oldLoaded[JsonSource.IDFP][self.idfpName.get()]
                 except KeyError: update = False
                 except Exception as e:
                     self.UIMaster.StatusMessageErrorDump(e,"Error searching for the IDFP in json")
@@ -656,7 +657,7 @@ class Friendlies(UIComponentBase):
                         "Dispersion" : dispersion
                     }
                 }
-                try: self.UIMaster.castJson.Load(source=JsonSource.FRIENDLY)[self.friendlyName.get()]
+                try: self.UIMaster.oldLoaded[JsonSource.FRIENDLY][self.friendlyName.get()]
                 except KeyError: update = False
                 except Exception as e:
                     self.UIMaster.StatusMessageErrorDump(e,"Error searching for the friendly position in json")
@@ -798,7 +799,7 @@ class TargetCreation(UIComponentBase):
                 if prefix == "FPF":
                     self.UIMaster.target.CreateCheckBoxList(self.UIMaster.target.targetListFPFCanvasFrame,{key: self.UIMaster.target.targetListCheckBoxStates[prefix][key] for key in sorted_items},self.UIMaster.target.targetSeriesDict[prefix])
                 prefixTargetList = {}
-                try: prefixTargetList[prefix] = self.UIMaster.castJson.Load(source=JsonSource.TARGET)[prefix]
+                try: prefixTargetList[prefix] = self.UIMaster.oldLoaded[JsonSource.TARGET][prefix]
                 except: prefixTargetList[prefix] = {}
                 mutator = "None"
                 orientation = "None"
@@ -1206,8 +1207,8 @@ class TargetDetails(UIComponentBase):
             targets[prefix][target]["Time"]["Second"] = int(self.fireMissionSecond.get())
             return targets,fireMissions
             
-        targets = self.UIMaster.castJson.Load(source=JsonSource.TARGET)
-        fireMissions = self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)
+        targets = self.UIMaster.oldLoaded[JsonSource.TARGET]
+        fireMissions = self.UIMaster.oldLoaded[JsonSource.FIREMISSION]
         for target, (edit, calculate) in self.UIMaster.target.targetListCheckBoxStates["LR"].items():
             if edit.get() == True:
                 targets,fireMissions = SaveSettings("LR",target,targets,fireMissions)
@@ -1240,7 +1241,7 @@ class TargetDetails(UIComponentBase):
             self.UIMaster.target.targetListCheckBoxStates["Group"][newItem] = (BooleanVar(),BooleanVar(value=True))
             self.UIMaster.target.CreateCheckBoxList(self.UIMaster.target.targetListGroupCanvasFrame,self.UIMaster.target.targetListCheckBoxStates["Group"],None,GroupSelection=True)
             groupTargetList = {}
-            try: groupTargetList["Group"] = self.UIMaster.castJson.Load(source=JsonSource.TARGET)["Group"]
+            try: groupTargetList["Group"] = self.UIMaster.oldLoaded[JsonSource.TARGET]["Group"]
             except: groupTargetList["Group"] = {}
             try: int(self.fireMissionGroupSpacing.get())
             except Exception as e:
@@ -1286,9 +1287,9 @@ class Clock(UIComponentBase):
             self.clockWidth = 420
             self.clockHeight = 420
             self.clockRadius = 200
-        try: self.clockRim = int(common["clockRimWidth"])
+        try: self.clockRim = int(common["clockRim"])
         except: self.clockRim = 4
-        try: self.clockFont = int(common["clockFontSize"])
+        try: self.clockFont = int(common["clockNumeralFontSize"])
         except: self.clockFont = 14
         try: self.clockHand = int(common["clockHandSize"])
         except: self.clockHand = 5
@@ -1368,6 +1369,14 @@ class Clock(UIComponentBase):
         clockSettingsApplyFrame = ttk.Frame(clockSettingsFrame)
         clockSettingsApplyFrame.grid_columnconfigure(0,weight=1)
         clockSettingApplyButton = ttk.Button(clockSettingsApplyFrame,text="Apply",command= lambda: self.ClockApplySettings(clockSize=clockSettingSizeEntry.get(),clockRim=clockSettingRimWidthEntry.get(),clockNumeralFontSize=clockSettingFontSizeEntry.get(),clockHandSize=clockSettingHandSizeEntry.get(),clockSecHandSize=clockSettingSecHandSizeEntry.get()))
+        try:
+            jsonSettings = self.UIMaster.castJson.Load(source=JsonSource.COMMON,localOverride=True)
+            clockSettingSizeEntry.insert(0,jsonSettings["clockSize"])
+            clockSettingRimWidthEntry.insert(0,jsonSettings["clockRim"])
+            clockSettingFontSizeEntry.insert(0,jsonSettings["clockNumeralFontSize"])
+            clockSettingHandSizeEntry.insert(0,jsonSettings["clockHandSize"])
+            clockSettingSecHandSizeEntry.insert(0,jsonSettings["clockSecHandSize"])
+        except: None
         if popoutOption:
             clockSettingsApplyFrame.grid_columnconfigure(0,weight=5)
             clockSettingPopoutButton = ttk.Button(clockSettingsApplyFrame,image=self.popoutImage,command= lambda: self.ClockSettingsPopout())
@@ -1539,7 +1548,7 @@ class Clock(UIComponentBase):
         if offset.isspace() == False or offset != "0":
             try: self.clockHandOffset = float(offset)
             except ValueError:
-                try: self.clockHandOffset = float(self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)[self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][offset]["TOF"])
+                try: self.clockHandOffset = float(self.UIMaster.oldLoaded[JsonSource.FIREMISSION][self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][offset]["TOF"])
                 except: return False
             except: None
         else:
@@ -1649,7 +1658,7 @@ class Targets(UIComponentBase):
         targetListSeriesCalcImage.image = targetListCalcImage
         targetListIndexEditImage.image = targetListEditImage
         targetListIndexCalcImage.image = targetListCalcImage
-        self.targetListCalculate = ttk.Button(targetListLabelframe,text="Calculate",command=self.Calculate,image=targetListCalcImage,compound="left")
+        self.targetListCalculate = ttk.Button(targetListLabelframe,text="Calculate",command=self.CalculateThread ,image=targetListCalcImage,compound="left")
         self.targetListCalculate.image = targetListCalcImage
         targetListFrame = ttk.Frame(targetListLabelframe)
         targetListFrame.grid_columnconfigure(0,weight=1)
@@ -1864,7 +1873,7 @@ class Targets(UIComponentBase):
                 self.UIMaster.targetDetail.fireMissionGroupSelectionLabelframe.grid_remove()
 
     def FireMissionEdit(self,*args):
-        targets = self.UIMaster.castJson.Load(source=JsonSource.TARGET)
+        targets = self.UIMaster.oldLoaded[JsonSource.TARGET]
         for target, (edit, calculate) in self.targetListCheckBoxStates["LR"].items():
             if edit.get() == True:
                 self.FireMissionEditPasteSettings("LR",target,targets)
@@ -1989,12 +1998,12 @@ class Targets(UIComponentBase):
         def CopyGrid(widget: Widget,text,prefix):
             try:
                 if widget.winfo_exists():
-                    loadedTarget = self.UIMaster.castJson.Load(source=JsonSource.TARGET)[prefix][widget.cget("text")]
+                    loadedTarget = self.UIMaster.oldLoaded[JsonSource.TARGET][prefix][widget.cget("text")]
                     grid = loadedTarget["GridX"]+loadedTarget["GridY"]
                     pyperclip.copy(grid)
                     text = widget.cget("text")
                 else:
-                    loadedTarget = self.UIMaster.castJson.Load(source=JsonSource.TARGET)[prefix][text]
+                    loadedTarget = self.UIMaster.oldLoaded[JsonSource.TARGET][prefix][text]
                     grid = loadedTarget["GridX"]+loadedTarget["GridY"]
                     pyperclip.copy(grid)
                 self.UIMaster.StatusMessageLog(privateMessage=f"Copied {prefix}-{text} grid {grid} to clipboard")
@@ -2003,11 +2012,11 @@ class Targets(UIComponentBase):
         def ClockSplashOffset(widget: Widget,text,prefix):
             try:
                 if widget.winfo_exists():
-                    self.UIMaster.clock.clockHandOffset = (float(self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)[self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][f"{prefix}-{widget.cget('text')}"]["TOF"]))
+                    self.UIMaster.clock.clockHandOffset = (float(self.UIMaster.oldLoaded[JsonSource.FIREMISSION][self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][f"{prefix}-{widget.cget('text')}"]["TOF"]))
                     textTemp = widget.cget("text")
                     self.UIMaster.clock.clockOffsetStrVar.set(f"{prefix}-{textTemp}")
                 else:
-                    self.UIMaster.clock.clockHandOffset = (float(self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)[self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][text]["TOF"]))
+                    self.UIMaster.clock.clockHandOffset = (float(self.UIMaster.oldLoaded[JsonSource.FIREMISSION][self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][text]["TOF"]))
                     self.UIMaster.clock.clockOffsetStrVar.set(text)
             except KeyError: self.UIMaster.StatusMessageLog(message=f"Calculated Fire Mission {prefix}-{text} is not found or calculated")
             except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to send Clock splash offset from {prefix}-{text}")
@@ -2145,17 +2154,39 @@ class Targets(UIComponentBase):
         canvas.config(scrollregion=canvas.bbox("all"))
 
     def CalculateSnapshot(self,IDFPDict,IDFP,width, depth,tgtX,tgtY,tgtHeight,temperature,humidity,pressure,windDirection,windMagnitude,windDynamic):
-        self.targetListCalculate.config(state="disabled")
-        self.UIMaster.statusbar.statusProgressBar.config(value=0,mode="determinate")
-        if int(depth) > 0:
-            calculations = 3
-        else:
-            calculations = 1
-        self.UIMaster.statusbar.statusProgressBar["maximum"] = int(calculations)
-        states = self.UIMaster.castJson.Load(source=JsonSource.COMMON)
-        charge = -1 if IDFPDict[IDFP]["ForceCharge"] == 0 else int(IDFPDict[IDFP]["Charge"])
-        if width == 0 and depth == 0:
-            solution = AF.Solution(self.UIMaster.exeDir,
+        try:
+            self.targetListCalculate.config(state="disabled")
+            self.UIMaster.statusbar.statusProgressBar.config(value=0,mode="determinate")
+            if int(depth) > 0:
+                calculations = 3
+            else:
+                calculations = 1
+            self.UIMaster.statusbar.statusProgressBar["maximum"] = int(calculations)
+            states = self.UIMaster.castJson.Load(source=JsonSource.COMMON)
+            charge = -1 if IDFPDict[IDFP]["ForceCharge"] == 0 else int(IDFPDict[IDFP]["Charge"])
+            if width == 0 and depth == 0:
+                solution = AF.Solution(self.UIMaster.exeDir,
+                                        artyX=IDFPDict[IDFP]["GridX"],
+                                        artyY=IDFPDict[IDFP]["GridY"],
+                                        system=states["system"],
+                                        fireAngle=IDFPDict[IDFP]["Trajectory"],
+                                        tgtX=tgtX,
+                                        tgtY=tgtY,
+                                        artyHeight=IDFPDict[IDFP]["Height"],
+                                        targetHeight=tgtHeight,
+                                        maxHeight=self.UIMaster.maxTerrainHeight,
+                                        windDirection=windDirection,
+                                        windMagnitude=windMagnitude,
+                                        windDynamic=windDynamic,
+                                        temperature=temperature,
+                                        humidity=humidity,
+                                        pressure=pressure,
+                                        charge=charge
+                                        )
+            elif width != 0 or depth != 0:
+                solution = AF.Box(self.UIMaster.exeDir,
+                                    deviationLength=depth/2,
+                                    deviationWidth=width/2,
                                     artyX=IDFPDict[IDFP]["GridX"],
                                     artyY=IDFPDict[IDFP]["GridY"],
                                     system=states["system"],
@@ -2171,245 +2202,242 @@ class Targets(UIComponentBase):
                                     temperature=temperature,
                                     humidity=humidity,
                                     pressure=pressure,
-                                    charge=charge
+                                    charge=charge,
+                                    progressbar=self.UIMaster.statusbar.statusProgressBar
                                     )
-        elif width != 0 or depth != 0:
-            solution = AF.Box(self.UIMaster.exeDir,
-                                deviationLength=depth/2,
-                                deviationWidth=width/2,
-                                artyX=IDFPDict[IDFP]["GridX"],
-                                artyY=IDFPDict[IDFP]["GridY"],
-                                system=states["system"],
-                                fireAngle=IDFPDict[IDFP]["Trajectory"],
-                                tgtX=tgtX,
-                                tgtY=tgtY,
-                                artyHeight=IDFPDict[IDFP]["Height"],
-                                targetHeight=tgtHeight,
-                                maxHeight=self.UIMaster.maxTerrainHeight,
-                                windDirection=windDirection,
-                                windMagnitude=windMagnitude,
-                                windDynamic=windDynamic,
-                                temperature=temperature,
-                                humidity=humidity,
-                                pressure=pressure,
-                                charge=charge,
-                                progressbar=self.UIMaster.statusbar.statusProgressBar
-                                )
-        elif width != 0 and depth == 0:
-            solution = AF.Line(self.UIMaster.exeDir,
-                                orientation="Horizontal",
-                                deviation=width/2,
-                                artyX=IDFPDict[IDFP]["GridX"],
-                                artyY=IDFPDict[IDFP]["GridY"],
-                                system=states["system"],
-                                fireAngle=IDFPDict[IDFP]["Trajectory"],
-                                tgtX=tgtX,
-                                tgtY=tgtY,
-                                artyHeight=IDFPDict[IDFP]["Height"],
-                                targetHeight=tgtHeight,
-                                maxHeight=self.UIMaster.maxTerrainHeight,
-                                windDirection=windDirection,
-                                windMagnitude=windMagnitude,
-                                windDynamic=windDynamic,
-                                temperature=temperature,
-                                humidity=humidity,
-                                pressure=pressure,
-                                charge=charge,
-                                progressbar=self.UIMaster.statusbar.statusProgressBar
-                                )
-        else:
-            solution = AF.Line(self.UIMaster.exeDir,
-                                orientation="Vertical",
-                                deviation=depth/2,
-                                artyX=IDFPDict[IDFP]["GridX"],
-                                artyY=IDFPDict[IDFP]["GridY"],
-                                system=states["system"],
-                                fireAngle=IDFPDict[IDFP]["Trajectory"],
-                                tgtX=tgtX,
-                                tgtY=tgtY,
-                                artyHeight=IDFPDict[IDFP]["Height"],
-                                targetHeight=tgtHeight,
-                                maxHeight=self.UIMaster.maxTerrainHeight,
-                                windDirection=windDirection,
-                                windMagnitude=windMagnitude,
-                                windDynamic=windDynamic,
-                                temperature=temperature,
-                                humidity=humidity,
-                                pressure=pressure,
-                                charge=charge,
-                                progressbar=self.UIMaster.statusbar.statusProgressBar
-                                )
-        self.UIMaster.StatusMessageLog(message="Calculated snapshot, Range: {}m, Bearing: {:03d}°".format(int(solution["Range"]),int(solution["Bearing"]*180/np.pi)))
-        self.UIMaster.statusbar.statusProgressBar.config(value = self.UIMaster.statusbar.statusProgressBar.cget("value") + 1)
-        self.UIMaster.statusbar.statusProgressBar.update()
-        return solution
+            elif width != 0 and depth == 0:
+                solution = AF.Line(self.UIMaster.exeDir,
+                                    orientation="Horizontal",
+                                    deviation=width/2,
+                                    artyX=IDFPDict[IDFP]["GridX"],
+                                    artyY=IDFPDict[IDFP]["GridY"],
+                                    system=states["system"],
+                                    fireAngle=IDFPDict[IDFP]["Trajectory"],
+                                    tgtX=tgtX,
+                                    tgtY=tgtY,
+                                    artyHeight=IDFPDict[IDFP]["Height"],
+                                    targetHeight=tgtHeight,
+                                    maxHeight=self.UIMaster.maxTerrainHeight,
+                                    windDirection=windDirection,
+                                    windMagnitude=windMagnitude,
+                                    windDynamic=windDynamic,
+                                    temperature=temperature,
+                                    humidity=humidity,
+                                    pressure=pressure,
+                                    charge=charge,
+                                    progressbar=self.UIMaster.statusbar.statusProgressBar
+                                    )
+            else:
+                solution = AF.Line(self.UIMaster.exeDir,
+                                    orientation="Vertical",
+                                    deviation=depth/2,
+                                    artyX=IDFPDict[IDFP]["GridX"],
+                                    artyY=IDFPDict[IDFP]["GridY"],
+                                    system=states["system"],
+                                    fireAngle=IDFPDict[IDFP]["Trajectory"],
+                                    tgtX=tgtX,
+                                    tgtY=tgtY,
+                                    artyHeight=IDFPDict[IDFP]["Height"],
+                                    targetHeight=tgtHeight,
+                                    maxHeight=self.UIMaster.maxTerrainHeight,
+                                    windDirection=windDirection,
+                                    windMagnitude=windMagnitude,
+                                    windDynamic=windDynamic,
+                                    temperature=temperature,
+                                    humidity=humidity,
+                                    pressure=pressure,
+                                    charge=charge,
+                                    progressbar=self.UIMaster.statusbar.statusProgressBar
+                                    )
+            self.UIMaster.StatusMessageLog(message="Calculated snapshot, Range: {}m, Bearing: {:03d}°".format(int(solution["Range"]),int(solution["Bearing"]*180/np.pi)))
+            self.UIMaster.statusbar.statusProgressBar.config(value = self.UIMaster.statusbar.statusProgressBar.cget("value") + 1)
+            self.UIMaster.statusbar.statusProgressBar.update()
+            return solution
+        except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage="Failed to calculate snapshot")
+        finally: self.targetListCalculate.config(state="normal")
+
 
 
     def Calculate(self):
-        self.targetListCalculate.config(state="disabled")
-        self.UIMaster.statusbar.statusProgressBar.config(value=0,mode="determinate")
-        calculations = 0
-        targets = self.UIMaster.castJson.Load(source=JsonSource.TARGET)
-        def CalculationPhasesTotal(mission):
-            nonlocal calculations
-            for target, (edit, calculate) in self.targetListCheckBoxStates[mission].items():
+        try:
+            self.targetListCalculate.config(state="disabled")
+            self.UIMaster.statusbar.statusProgressBar.config(value=0,mode="determinate")
+            calculations = 0
+            targets = self.UIMaster.castJson.Load(source=JsonSource.TARGET)
+            def CalculationPhasesTotal(mission):
+                nonlocal calculations
+                for target, (edit, calculate) in self.targetListCheckBoxStates[mission].items():
+                    if calculate.get() == True:
+                        calculations += 1
+                        try:
+                            if targets[mission][target]["Mutator"] == "Line":
+                                if targets[mission][target]["Orientation"] == "Vertical":
+                                    calculations += 2
+                            elif targets[mission][target]["Mutator"] == "Box":
+                                calculations += 2
+                            elif targets[mission][target]["Mutator"] == "LineMultiPoint":
+                                if targets[mission][target]["Explicit"] == True:
+                                    calculations += 1
+                        except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to get {mission}-{target} mutator")
+                            
+
+            CalculationPhasesTotal("FPF")
+            CalculationPhasesTotal("LR")
+            CalculationPhasesTotal("XY")
+            for target, (edit, calculate) in self.targetListCheckBoxStates["Group"].items():
                 if calculate.get() == True:
                     calculations += 1
                     try:
-                        if targets[mission][target]["Mutator"] == "Line":
-                            if targets[mission][target]["Orientation"] == "Vertical":
+                        if targets["Group"][target]["Mutator"] == "Line":
+                            if targets["Group"][target]["Orientation"] == "Vertical":
                                 calculations += 2
-                        elif targets[mission][target]["Mutator"] == "Box":
+                        elif targets["Group"][target]["Mutator"] == "Box":
                             calculations += 2
-                        elif targets[mission][target]["Mutator"] == "LineMultiPoint":
-                            if targets[mission][target]["Explicit"] == True:
-                                calculations += 1
-                    except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to get {mission}-{target} mutator")
-                        
+                        elif targets["Group"][target]["Mutator"] == "LineMultiPoint":
+                            if targets["Group"][target]["Explicit"] == True:
+                                calculations += 2
+                    except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to get Group mission-{target} mutator")
 
-        CalculationPhasesTotal("FPF")
-        CalculationPhasesTotal("LR")
-        CalculationPhasesTotal("XY")
-        for target, (edit, calculate) in self.targetListCheckBoxStates["Group"].items():
-            if calculate.get() == True:
-                calculations += 1
-                try:
-                    if targets["Group"][target]["Mutator"] == "Line":
-                        if targets["Group"][target]["Orientation"] == "Vertical":
-                            calculations += 2
-                    elif targets["Group"][target]["Mutator"] == "Box":
-                        calculations += 2
-                    elif targets["Group"][target]["Mutator"] == "LineMultiPoint":
-                        if targets["Group"][target]["Explicit"] == True:
-                            calculations += 2
-                except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to get Group mission-{target} mutator")
+            self.UIMaster.statusbar.statusProgressBar["maximum"] = int(calculations)
+            states = {}
+            IDFPDict = {}
+            states = self.UIMaster.castJson.Load(source=JsonSource.COMMON)
+            IDFPDict = self.UIMaster.castJson.Load(source=JsonSource.IDFP)
+            def solutions (details,idfp):
+                charge = -1 if IDFPDict[idfp]["ForceCharge"] == 0 else int(IDFPDict[idfp]["Charge"])
+                if details["Mutator"] == "None":
+                    solution = AF.Solution(baseDir=self.UIMaster.exeDir,
+                                            artyX=IDFPDict[idfp]["GridX"],
+                                            artyY=IDFPDict[idfp]["GridY"],
+                                            system=states["system"],
+                                            fireAngle=IDFPDict[idfp]["Trajectory"],
+                                            tgtX=details["GridX"],tgtY=details["GridY"],
+                                            artyHeight=IDFPDict[idfp]["Height"],
+                                            targetHeight=details["Height"],
+                                            maxHeight=self.UIMaster.maxTerrainHeight,
+                                            windDirection=states["windDirection"],
+                                            windMagnitude=states["windMagnitude"],
+                                            windDynamic=int(states["windDynamic"]),
+                                            humidity=states["airHumidity"],
+                                            temperature=states["airTemperature"],
+                                            pressure=states["airPressure"],
+                                            charge=charge
+                                        )
+                    #############TERRAIN AVOIDANCE +1 Charge
+                    solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
+                    if details["Condition"] == "Time":
+                        solution["Time"] = {
+                            "Hour": details["Time"]["Hour"],
+                            "Minute": details["Time"]["Minute"],
+                            "Second": details["Time"]["Second"]
+                        }
+                    del solution["LowPositions"]
+                    return solution
+                elif details["Mutator"] == "Line":
+                    deviation = details["Depth"] if details["Orientation"] == "Vertical" else details["Width"]
+                    solution = AF.Line(baseDir=self.UIMaster.exeDir,
+                            orientation=details["Orientation"],
+                            deviation=deviation,
+                            artyX=IDFPDict[idfp]["GridX"],
+                            artyY=IDFPDict[idfp]["GridY"],
+                            system=states["system"],
+                            fireAngle=IDFPDict[idfp]["Trajectory"],
+                            tgtX=details["GridX"],tgtY=details["GridY"],
+                            artyHeight=IDFPDict[idfp]["Height"],
+                            targetHeight=details["Height"],
+                            maxHeight=self.UIMaster.maxTerrainHeight,
+                            windDirection=states["windDirection"],
+                            windMagnitude=states["windMagnitude"],
+                            windDynamic=int(states["windDynamic"]),
+                            humidity=states["airHumidity"],
+                            temperature=states["airTemperature"],
+                            pressure=states["airPressure"],
+                            charge=charge,
+                            progressbar=self.UIMaster.statusbar.statusProgressBar
+                    )
+                    solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Orientation"],solution["Deviation"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],details["Orientation"],deviation,IDFPDict[idfp]["Trajectory"]
+                    if details["Condition"] == "Time":
+                        solution["Time"] = {
+                            "Hour": details["Time"]["Hour"],
+                            "Minute": details["Time"]["Minute"],
+                            "Second": details["Time"]["Second"]
+                        }
+                    del solution["LowPositions"]
+                    return solution
+                
+                elif details["Mutator"] == "Box":
+                    solution = AF.Box(baseDir=self.UIMaster.exeDir,
+                            deviationLength=details["Depth"],
+                            deviationWidth=details["Width"],
+                            artyX=IDFPDict[idfp]["GridX"],
+                            artyY=IDFPDict[idfp]["GridY"],
+                            system=states["system"],
+                            fireAngle=IDFPDict[idfp]["Trajectory"],
+                            tgtX=details["GridX"],tgtY=details["GridY"],
+                            artyHeight=IDFPDict[idfp]["Height"],
+                            targetHeight=details["Height"],
+                            maxHeight=self.UIMaster.maxTerrainHeight,
+                            windDirection=states["windDirection"],
+                            windMagnitude=states["windMagnitude"],
+                            windDynamic=int(states["windDynamic"]),
+                            humidity=states["airHumidity"],
+                            temperature=states["airTemperature"],
+                            pressure=states["airPressure"],
+                            charge=charge,
+                            progressbar=self.UIMaster.statusbar.statusProgressBar
+                    )
+                    solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
+                    if details["Condition"] == "Time":
+                        solution["Time"] = {
+                            "Hour": details["Time"]["Hour"],
+                            "Minute": details["Time"]["Minute"],
+                            "Second": details["Time"]["Second"]
+                        }
+                    del solution["LowPositions"]
+                    return solution
+                else:
+                    None
+                    #################BOXBOXBOX
+            def CalculationIteration(mission):
+                for target, (edit,calculate) in self.targetListCheckBoxStates[mission].items():
+                    if calculate.get() == True:
+                        details = targets[mission][target]
+                        idfpSelection = self.UIMaster.castJson.Load(source=JsonSource.COMMON,localOverride=True)["IDFPSelection"]
+                        for idfp in [list(IDFPDict.keys())[i] for i in list(idfpSelection)]:
+                            try :
+                                self.UIMaster.StatusMessageLog(message=f"Beginning calculation of {mission}-{target}")
+                                solution = solutions(details,idfp)
+                            except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to calculate {mission}-{target}")
+                            else:
+                                fireMissions = self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)
+                                try: fireMissions[idfp][f"{mission}-{target}"] = solution
+                                except KeyError: fireMissions[idfp] = {f"{mission}-{target}" : solution}
+                                self.UIMaster.castJson.Save(source=JsonSource.FIREMISSION,newEntry=fireMissions)
+                                self.UIMaster.SyncUpdate(JsonSource.FIREMISSION)
+                                self.UIMaster.StatusMessageLog(message="Calculated {}-{}, Range: {}m, Bearing: {:03d}°".format(mission,target,int(solution["Range"]),int(solution["Bearing"]*180/np.pi)))
+                                self.UIMaster.statusbar.statusMessageLabel.update()
+                                self.UIMaster.statusbar.statusProgressBar.config(value = self.UIMaster.statusbar.statusProgressBar.cget("value") + 1)
+                                self.UIMaster.statusbar.statusProgressBar.update()
+            CalculationIteration("FPF")
+            CalculationIteration("LR")
+            CalculationIteration("XY")
+            CalculationIteration("Group")
+        except Exception as e:
+            self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to Calculate fire missions")
+        finally:
+            self.targetListCalculate.config(state="normal")
+            self.UIMaster.root.bell()
 
-        self.UIMaster.statusbar.statusProgressBar["maximum"] = int(calculations)
-        states = {}
-        IDFPDict = {}
-        states = self.UIMaster.castJson.Load(source=JsonSource.COMMON)
-        IDFPDict = self.UIMaster.castJson.Load(source=JsonSource.IDFP)
-        def solutions (details,idfp):
-            charge = -1 if IDFPDict[idfp]["ForceCharge"] == 0 else int(IDFPDict[idfp]["Charge"])
-            if details["Mutator"] == "None":
-                solution = AF.Solution(baseDir=self.UIMaster.exeDir,
-                                        artyX=IDFPDict[idfp]["GridX"],
-                                        artyY=IDFPDict[idfp]["GridY"],
-                                        system=states["system"],
-                                        fireAngle=IDFPDict[idfp]["Trajectory"],
-                                        tgtX=details["GridX"],tgtY=details["GridY"],
-                                        artyHeight=IDFPDict[idfp]["Height"],
-                                        targetHeight=details["Height"],
-                                        maxHeight=self.UIMaster.maxTerrainHeight,
-                                        windDirection=states["windDirection"],
-                                        windMagnitude=states["windMagnitude"],
-                                        windDynamic=int(states["windDynamic"]),
-                                        humidity=states["airHumidity"],
-                                        temperature=states["airTemperature"],
-                                        pressure=states["airPressure"],
-                                        charge=charge
-                                    )
-                #############TERRAIN AVOIDANCE +1 Charge
-                solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
-                if details["Condition"] == "Time":
-                    solution["Time"] = {
-                        "Hour": details["Time"]["Hour"],
-                        "Minute": details["Time"]["Minute"],
-                        "Second": details["Time"]["Second"]
-                    }
-                del solution["LowPositions"]
-                return solution
-            elif details["Mutator"] == "Line":
-                deviation = details["Depth"] if details["Orientation"] == "Vertical" else details["Width"]
-                solution = AF.Line(baseDir=self.UIMaster.exeDir,
-                        orientation=details["Orientation"],
-                        deviation=deviation,
-                        artyX=IDFPDict[idfp]["GridX"],
-                        artyY=IDFPDict[idfp]["GridY"],
-                        system=states["system"],
-                        fireAngle=IDFPDict[idfp]["Trajectory"],
-                        tgtX=details["GridX"],tgtY=details["GridY"],
-                        artyHeight=IDFPDict[idfp]["Height"],
-                        targetHeight=details["Height"],
-                        maxHeight=self.UIMaster.maxTerrainHeight,
-                        windDirection=states["windDirection"],
-                        windMagnitude=states["windMagnitude"],
-                        windDynamic=int(states["windDynamic"]),
-                        humidity=states["airHumidity"],
-                        temperature=states["airTemperature"],
-                        pressure=states["airPressure"],
-                        charge=charge,
-                        progressbar=self.UIMaster.statusbar.statusProgressBar
-                )
-                solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Orientation"],solution["Deviation"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],details["Orientation"],deviation,IDFPDict[idfp]["Trajectory"]
-                if details["Condition"] == "Time":
-                    solution["Time"] = {
-                        "Hour": details["Time"]["Hour"],
-                        "Minute": details["Time"]["Minute"],
-                        "Second": details["Time"]["Second"]
-                    }
-                del solution["LowPositions"]
-                return solution
-            
-            elif details["Mutator"] == "Box":
-                solution = AF.Box(baseDir=self.UIMaster.exeDir,
-                        deviationLength=details["Depth"],
-                        deviationWidth=details["Width"],
-                        artyX=IDFPDict[idfp]["GridX"],
-                        artyY=IDFPDict[idfp]["GridY"],
-                        system=states["system"],
-                        fireAngle=IDFPDict[idfp]["Trajectory"],
-                        tgtX=details["GridX"],tgtY=details["GridY"],
-                        artyHeight=IDFPDict[idfp]["Height"],
-                        targetHeight=details["Height"],
-                        maxHeight=self.UIMaster.maxTerrainHeight,
-                        windDirection=states["windDirection"],
-                        windMagnitude=states["windMagnitude"],
-                        windDynamic=int(states["windDynamic"]),
-                        humidity=states["airHumidity"],
-                        temperature=states["airTemperature"],
-                        pressure=states["airPressure"],
-                        charge=charge,
-                        progressbar=self.UIMaster.statusbar.statusProgressBar
-                )
-                solution["Effect"],solution["Length"],solution["Condition"],solution["Mutator"],solution["Trajectory"] = details["Effect"],details["Length"],details["Condition"],details["Mutator"],IDFPDict[idfp]["Trajectory"]
-                if details["Condition"] == "Time":
-                    solution["Time"] = {
-                        "Hour": details["Time"]["Hour"],
-                        "Minute": details["Time"]["Minute"],
-                        "Second": details["Time"]["Second"]
-                    }
-                del solution["LowPositions"]
-                return solution
-            else:
-                None
-                #################BOXBOXBOX
-        def CalculationIteration(mission):
-            for target, (edit,calculate) in self.targetListCheckBoxStates[mission].items():
-                if calculate.get() == True:
-                    details = targets[mission][target]
-                    idfpSelection = self.UIMaster.castJson.Load(source=JsonSource.COMMON,localOverride=True)["IDFPSelection"]
-                    for idfp in [list(IDFPDict.keys())[i] for i in list(idfpSelection)]:
-                        try :
-                            self.UIMaster.StatusMessageLog(message=f"Beginning calculation of {mission}-{target}")
-                            solution = solutions(details,idfp)
-                        except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to calculate {mission}-{target}")
-                        else:
-                            fireMissions = self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)
-                            try: fireMissions[idfp][f"{mission}-{target}"] = solution
-                            except KeyError: fireMissions[idfp] = {f"{mission}-{target}" : solution}
-                            self.UIMaster.castJson.Save(source=JsonSource.FIREMISSION,newEntry=fireMissions)
-                            self.UIMaster.SyncUpdate(JsonSource.FIREMISSION)
-                            self.UIMaster.StatusMessageLog(message="Calculated {}-{}, Range: {}m, Bearing: {:03d}°".format(mission,target,int(solution["Range"]),int(solution["Bearing"]*180/np.pi)))
-                            self.UIMaster.statusbar.statusMessageLabel.update()
-                            self.UIMaster.statusbar.statusProgressBar.config(value = self.UIMaster.statusbar.statusProgressBar.cget("value") + 1)
-                            self.UIMaster.statusbar.statusProgressBar.update()
-        CalculationIteration("FPF")
-        CalculationIteration("LR")
-        CalculationIteration("XY")
-        CalculationIteration("Group")
-        self.targetListCalculate.config(state="normal")
-        self.UIMaster.root.bell()
+    def CalculateThread(self):
+        if hasattr(self,"thread"):
+            if not self.thread.is_alive():
+                self.thread = threading.Thread(target=self.Calculate,daemon=True)
+                self.thread.start()
+        else:
+            self.thread = threading.Thread(target=self.Calculate,daemon=True)
+            self.thread.start()
+
+
 
     def MenuSafetyClear(self,*args):
         if int(self.UIMaster.mainMenu.windowResetSafety.get())==0:
@@ -2514,7 +2542,7 @@ class FireMissions(UIComponentBase):
                             except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to remove {self.fireMissionNotebook.tab(tabId,option='text')} reference from dictionary")
                     except: None
                     try: del self.fireMissionNotebookFrameDict[self.fireMissionNotebook.tab(tabId,option="text")]
-                    except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to remove Fire Mission {self.fireMissionNotebook.tab(tabId,option='text')}")
+                    except: None
             for idfp in fireMissions.keys():
                 if idfp not in tabs:
                     self.fireMissionNotebookFrame = ttk.Frame(self.fireMissionNotebook,width="500")
@@ -2587,7 +2615,7 @@ class FireMissions(UIComponentBase):
             except: None
             try:vertex = int(np.ceil(list(details["Vertex"])[2]/5)*5)
             except:vertex = details["Vertex"]
-            textWidget.insert(END,"\tTrajectory\t| {} \n\tTOF\t| {:0.1f} s\n\tVertex\t| FL {:03d}\n".format(details["Trajectory"],float(details["TOF"]),vertex),("default","border"))
+            textWidget.insert(END,"\tTrajectory\t| {} \n\tTOF\t| {:0.1f} s\n\tVertex\t| FL {:03d}\n\tImpact:\n\t         Angle\t| {:0.1f}°\n\t         Speed\t| {:0.1f} m/s\n".format(details["Trajectory"],float(details["TOF"]),vertex,details["ImpactAngle"],details["ImpactSpeed"]),("default","border"))
             try:
                 details["ParallelCorrection"]
                 textWidget.insert(END,"\t",("default","border"))

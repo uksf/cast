@@ -60,5 +60,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='Functions/icons/uksf.ico'  # This sets the exe icon
+    icon='Functions/icons/uksf.ico'
 )

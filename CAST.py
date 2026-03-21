@@ -1,5 +1,5 @@
-testCommandLine = ["--json","server"]
-version = "v0.1.0"
+testCommandLine = ["--json","local"]
+version = "v0.1.0hotfix"
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -53,11 +53,10 @@ class Cast():
 
         
         self.UI = CastUI(version=version,exeDir=self.exeDir,baseDir=self.baseDir,appData_local=self.appData_local,updateQueue=self.updateQueue,mainClass=self,startUpClass = self.StartUp)
-        self.castJson = CastJson(self.jsonType,self.UI.StatusMessageErrorDump,self.exeDir,self.appData_local)
-        self.account = UksfAccounts(self.UI.StatusMessageErrorDump)
+        self.castJson = CastJson(self.jsonType,self.UI,self.exeDir,self.appData_local)
+        self.account = UksfAccounts(self.UI)
         self.UI.GetCastJson(self.castJson)
         self.UI.GetAccount(self.account)
-        self.castJson.GetStatusMessageErrorDump(self.UI.StatusMessageErrorDump)
         self.terrainFolders = ()
 
     def ListTerrainFolders(self):
@@ -84,6 +83,7 @@ class Cast():
         if refresh is not None:
             self.UI.StatusMessageLog("Logged back in as " + refresh["displayName"])
             self.user = refresh["displayName"]
+            print(self.user)
             self.UI.mainMenu.LoggedIn()
             return True
         else:
@@ -119,21 +119,29 @@ class Cast():
                 try:
                     list(json['idfp'].keys())
                     self.UI.root.after(1, lambda: self.UI.idfpCreation.SyncIDFP(list(json['idfp'].keys())))
+                    for map in self.UI.activeMaps.values():
+                        map.toolbar.MapUpdate(marker=[Map.Mark.IDFP,Map.Mark.FPF_BOUNDS,Map.Mark.GROUP_BOUNDS,Map.Mark.LR_BOUNDS,Map.Mark.XY_BOUNDS])
                 except Exception as e: self.UI.StatusMessageErrorDump(e,errorMessage="Error on processing IDFP JSON")
             elif step == 2 and values == 2 and 'friend' in json:
                 try:
                     list(json['friend'].keys())
                     self.UI.root.after(1, lambda: self.UI.friendly.SyncFriendlies(list(json['friend'].keys())))
+                    for map in self.UI.activeMaps.values():
+                        map.toolbar.MapUpdate(marker=[Map.Mark.FRIENDLY,Map.Mark.FRIENDLY_BOUNDS])
                 except Exception as e: self.UI.StatusMessageErrorDump(e,errorMessage="Error on processing Friendly JSON")
             elif step == 3 and values == 3 and 'targets' in json:
                 try:
                     json['targets']
                     self.UI.root.after(1, lambda: self.UI.target.SyncTargets(json['targets']))
+                    for map in self.UI.activeMaps.values():
+                        map.toolbar.MapUpdate(marker=[Map.Mark.XY,Map.Mark.LR,Map.Mark.GROUP,Map.Mark.FPF])
                 except Exception as e: self.UI.StatusMessageErrorDump(e,errorMessage="Error on processing Target JSON")
             elif step == 4 and values == 4 and 'fire mission' in json:
                 try:
                     json['fire mission']
                     self.UI.root.after(1, lambda: self.UI.fireMission.SyncFireMissions(json['fire mission']))
+                    for map in self.UI.activeMaps.values():
+                        map.toolbar.MapUpdate(marker=[Map.Mark.LR_BOUNDS,Map.Mark.FPF_BOUNDS,Map.Mark.XY_BOUNDS,Map.Mark.GROUP_BOUNDS,Map.Mark.NOFLY,Map.Mark.NOFLY_BOUNDS])
                 except Exception as e: self.UI.StatusMessageErrorDump(e,errorMessage="Error on processing Fire mission JSON")
         
         # Process the appropriate step
@@ -185,7 +193,7 @@ class Cast():
                         StartTerrainPrompt()
                 except:
                     None
-            self.UI.SyncUpdate()
+            # self.UI.SyncUpdate()
             self.UpdateQueueCheck()
         
         if login ==True or self.jsonType is JsonType.LOCAL:
@@ -269,6 +277,12 @@ class CastUI():
         self.messageLogOpen = False
         self.messageLogText = Text()
         
+        self.oldLoaded = {JsonSource.COMMON:{},
+                          JsonSource.IDFP:{},
+                          JsonSource.FRIENDLY:{},
+                          JsonSource.TARGET:{},
+                          JsonSource.FIREMISSION:{},
+                          JsonSource.MESSAGELOG:{},}
         #Window
         self.windowFlipPaneSide = StringVar(value="0")
 
@@ -409,12 +423,12 @@ class CastUI():
         clockFrame.grid_rowconfigure(1,weight=1) 
         self.miscNotebook.grid(column="0",row="0",sticky="NEW")
 
-    def StatusMessageLog(self,message="",privateMessage: str | None = None):
+    def StatusMessageLog(self,message="",privateMessage: str | None = None, localOverride = False):
         """
         Displays message in the status bar and log. Private message is given only to the user in the status bar, if message is "", it's not included in the log.
         """
 
-        tempLocal = True if self.account.authToken is None or self.castJson.jsonType == JsonType.LOCAL else False
+        tempLocal = True if self.account.authToken is None or self.castJson.jsonType == JsonType.LOCAL or localOverride == True else False
         if privateMessage is None:
             try: self.statusbar.statusMessageLabel.config(text=message)
             except: None
@@ -422,18 +436,19 @@ class CastUI():
         else:
             try: self.statusbar.statusMessageLabel.config(text=privateMessage)
             except: None
-        if message != "":
+        if message != "" and localOverride == False:
             self.castJson.Save(source=JsonSource.MESSAGELOG,newEntry=(str(datetime.now(timezone.utc))[:-11] + "\t" + "|" + "\t" + self.user + "\t" + "|" + "\t" + message+"\n"),append=True,localOverride=tempLocal)
             if self.messageLogOpen:
                 self.messageLogText.config(state=NORMAL)
                 self.messageLogText.delete("1.0","end")
+                tempLocal = True if self.account.authToken is None or self.castJson.jsonType == JsonType.LOCAL else False
                 self.messageLogText.insert("end",self.castJson.Load(source=JsonSource.MESSAGELOG,localOverride=tempLocal)) 
                 self.messageLogText.config(state=DISABLED)
                 self.messageLogText.yview_moveto(1)
 
-    def StatusMessageErrorDump(self,e: Exception, errorMessage: str | None =None):
+    def StatusMessageErrorDump(self,e: Exception, errorMessage: str | None =None , localOverride = False):
         if errorMessage is not None:
-            self.StatusMessageLog(message=errorMessage)
+            self.StatusMessageLog(message=errorMessage,localOverride=localOverride)
         try:
             if e:
                 fullTrace = traceback.extract_tb(e.__traceback__)
@@ -441,9 +456,11 @@ class CastUI():
                 for i,frame in enumerate(fullTrace):
                     filename = frame.filename.split('\\')[-1]
                     fullTraceStr+=f"\n\t\t{filename} | {frame.name} | {str(frame.lineno)}"
-                self.StatusMessageLog(message=f"Error details:\n\tVersion: {self.version}\n\tType: {type(e).__name__}\n\tError: {e}\n\tError Line: {fullTrace[-1].lineno} : {fullTrace[-1].line}\n\tFull stack:{fullTraceStr}",privateMessage="Empty")
-            else: self.StatusMessageLog(message=f"Failed error message")
-        except: self.StatusMessageLog(message=f"Failed error message")
+                print(f"Error details:\n\tVersion: {self.version}\n\tType: {type(e).__name__}\n\tError: {e}\n\tError Line: {fullTrace[-1].lineno} : {fullTrace[-1].line}\n\tFull stack:{fullTraceStr}")
+                self.StatusMessageLog(message=f"Error details:\n\tVersion: {self.version}\n\tType: {type(e).__name__}\n\tError: {e}\n\tError Line: {fullTrace[-1].lineno} : {fullTrace[-1].line}\n\tFull stack:{fullTraceStr}",privateMessage="Empty",localOverride=localOverride)
+            
+            else: self.StatusMessageLog(message=f"Failed error message",localOverride=localOverride)
+        except: self.StatusMessageLog(message=f"Failed error message",localOverride=localOverride)
     def LoginWindow(self) -> bool:
         def Login():
             loginMessage.grid()
@@ -763,7 +780,7 @@ class CastUI():
                     except Exception as e: self.StatusMessageErrorDump(e,errorMessage=f"Failed to delete {mission} target positions from JSON")
                 if calculated:
                     try:
-                        fireMissions = self.castJson.Load(source=JsonSource.TARGET)
+                        fireMissions = self.castJson.Load(source=JsonSource.FIREMISSION)
                         for idfp,missions in fireMissions.items():
                             for key in list(missions.keys()):
                                 if key[:2] == mission:
@@ -1113,19 +1130,38 @@ class CastUI():
             settingsList = [setting]
         
         def FetchJSON(setting):
-            # This runs in background thread - NO GUI calls at all!
             results = {}
             try:
                 if setting is JsonSource.COMMON:
                     results['common'] = self.castJson.Load(source=JsonSource.COMMON)
+                    if results['common'] == self.oldLoaded[JsonSource.COMMON]:
+                        return
+                    else:
+                        self.oldLoaded[JsonSource.COMMON] = results['common']
                 if setting is JsonSource.IDFP:
                     results['idfp'] = self.castJson.Load(source=JsonSource.IDFP)
+                    if results['idfp'] == self.oldLoaded[JsonSource.IDFP]:
+                        return
+                    else:
+                        self.oldLoaded[JsonSource.IDFP] = results['idfp']
                 if setting is JsonSource.FRIENDLY:
                     results['friend'] = self.castJson.Load(source=JsonSource.FRIENDLY)
+                    if results['friend'] == self.oldLoaded[JsonSource.FRIENDLY]:
+                        return
+                    else:
+                        self.oldLoaded[JsonSource.FRIENDLY] = results['friend']
                 if setting is JsonSource.TARGET:
-                    results['targets'] = self.castJson.Load(source=JsonSource.TARGET)##################SORT OUT TARGETS
+                    results['targets'] = self.castJson.Load(source=JsonSource.TARGET)
+                    if results['targets'] == self.oldLoaded[JsonSource.TARGET]:
+                        return
+                    else:
+                        self.oldLoaded[JsonSource.TARGET] = results['targets']
                 if setting is JsonSource.FIREMISSION:
                     results['fire mission'] = self.castJson.Load(source=JsonSource.FIREMISSION)
+                    if results['fire mission'] == self.oldLoaded[JsonSource.FIREMISSION]:
+                        return
+                    else:
+                        self.oldLoaded[JsonSource.FIREMISSION] = results['fire mission']
             except Exception as e:
                 results['error'] = f"Failed to load JSON: {str(e)}"
                 self.StatusMessageErrorDump(e,errorMessage=f"Failed to load JSON: {str(e)}")
@@ -1162,6 +1198,7 @@ class CastUI():
             self.activeMaps[str(self.mapNumber)] = popoutMap
             popoutMap.Initialise(mapFrame,True)
             popoutMap.toolbar.markSettings = self.mainMap.toolbar.markSettings
+            popoutMap.toolbar.MapUpdate([Map.Mark.IDFP,Map.Mark.FPF,Map.Mark.LR,Map.Mark.XY,Map.Mark.GROUP,Map.Mark.NOFLY,Map.Mark.FRIENDLY])
             mapFrame.grid(row=0,column=0,sticky="NESW")
             mapToplevel.protocol("WM_DELETE_WINDOW",lambda n = str(self.mapNumber): Close(n))
             self.mapNumber += 1
@@ -1173,7 +1210,7 @@ class CastUI():
             MapPopoutMenu.post(event.x_root,event.y_root)
 
     def Initialise(self):
-        
+        self.SyncUpdate()
         self.statusbar.Initialise(self.mainframe)
         self.MissionPageSetup()
         self.MapPageSetup()

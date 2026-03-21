@@ -769,6 +769,22 @@ class MapMarking():
                 bounds = mpatches.Wedge(origin,r=range+height,width=length,theta1=direction - halfangle,theta2=direction + halfangle,linestyle=style,linewidth=self.size,edgecolor = colour,fill = False)
             self.axArtist = self.ax.add_artist(bounds)
             return self.axArtist
+    def NATOStandards(self,force : Literal["BLUFOR","OPFOR","Civilian"],colour: str | None,*args,**kwargs):
+        for setting,value in kwargs.items():
+            setattr(self,setting,value)
+        drawArea = DrawingArea(self.size+10,self.size+10,0,0)
+        if force == "BLUFOR":
+            outerRim = mpatches.Rectangle((-self.size/2,-self.size/1.5),self.size,self.size*0.75)
+            if "tracked" in args:
+                None
+        elif force == "OPFOR":
+            outerRim = mpatches.Rectangle((-self.size/2,-self.size/2),self.size,self.size,angle=45,rotation_point="center")
+        elif force == "Civilian":
+            outerRim = mpatches.Rectangle((-self.size/2,-self.size/2),self.size,self.size)
+        
+        
+        
+        None
 
 class MarkerSettings():
     def __init__(self,**kwargs):
@@ -936,7 +952,7 @@ class MatPlotLibWidget():
         self.ax.grid(visible=True,which="minor",axis="both",color="k",alpha = 0.7,linestyle= "-",linewidth=0.1)
         
         self.updateTimer = None
-        self.mapDelay = 5000
+        self.mapDelay = 20000
         self.retry = 0
         self.retryDelay =500
         self.interactionTimer = None
@@ -1178,8 +1194,8 @@ class CustomToolbar(NavigationToolbar2Tk):
             while True:
                 task,*args = self.mapProcessQueue.get_nowait()
                 if task == "markerUpdate":
-                    process,json = args
-                    self.ProcessMap(process,json)
+                    process = args[0]
+                    self.ProcessMap(process)
                 if task == "markerClear":
                     process = args[0]
                     self.MapMarkerClear(process)
@@ -1188,13 +1204,13 @@ class CustomToolbar(NavigationToolbar2Tk):
             pass
         except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to update map, queue size: {str(self.mapProcessQueue.qsize())}")
         self.root.after(50,self.MapUpdateQueueCheck)
-    def ProcessMap(self,process,json):
+    def ProcessMap(self,process):
         try:
             if "error" in process:
                 self.UIMaster.StatusMessageLog(process['error'])
                 return
             self.MapMarkerClear(process)
-            self.SetMarkers(process,json)
+            self.SetMarkers(process)
         except Exception as e:
             self.UIMaster.StatusMessageErrorDump(e,errorMessage="messed up thread")
 
@@ -1206,64 +1222,41 @@ class CustomToolbar(NavigationToolbar2Tk):
         else:
             markerList = [marker]
         def FetchMarker(marker):
-            fetchedJson = {}
             try:
                 if marker is Mark.IDFP:
                     if self.markSettings.ReturnSettings("visible_IDFP")["visible_IDFP"].get() == "1":
-                        fetchedJson["IDFP"] = self.UIMaster.castJson.Load(JsonSource.IDFP)
-                        if fetchedJson["IDFP"] != {}:
-                            self.mapProcessQueue.put(("markerUpdate",Mark.IDFP,fetchedJson))
-                        else:
-                            self.mapProcessQueue.put(("markerClear",Mark.IDFP))
+                        self.mapProcessQueue.put(("markerUpdate",Mark.IDFP))
                     else:
                         self.mapProcessQueue.put(("markerClear",Mark.IDFP))
                 elif marker in [Mark.FPF,Mark.LR,Mark.XY,Mark.GROUP,Mark.NOFLY]:
                     if self.markSettings.ReturnSettings(f"visible_{marker}")[f"visible_{marker}"].get() == "1" or self.markSettings.ReturnSettings(f"visible_{marker}Bounds")[f"visible_{marker}Bounds"].get() =="1":
-                        fetchedJson["IDFP"] = self.UIMaster.castJson.Load(JsonSource.IDFP)
-                        fetchedJson["TARGET"] = self.UIMaster.castJson.Load(JsonSource.TARGET)
-                        fetchedJson["FIREMISSION"] = self.UIMaster.castJson.Load(JsonSource.FIREMISSION)
-                        if fetchedJson["IDFP"] != {} and fetchedJson["TARGET"] != {}:
                             if self.markSettings.ReturnSettings(f"visible_{marker}")[f"visible_{marker}"].get() == "1":
-                                self.mapProcessQueue.put(("markerUpdate",marker,fetchedJson))
+                                self.mapProcessQueue.put(("markerUpdate",marker))
                             else:
                                 self.mapProcessQueue.put(("markerClear",marker))
                             if self.markSettings.ReturnSettings(f"visible_{marker}Bounds")[f"visible_{marker}Bounds"].get() =="1":
-                                self.mapProcessQueue.put(("markerUpdate",f"{marker}Bounds",fetchedJson))
+                                self.mapProcessQueue.put(("markerUpdate",f"{marker}Bounds"))
                             else:
                                 self.mapProcessQueue.put(("markerClear",f"{marker}Bounds"))
-                        else:
-                            self.mapProcessQueue.put(("markerClear",marker))
-                            self.mapProcessQueue.put(("markerClear",f"{marker}Bounds"))
                     else:
                         self.mapProcessQueue.put(("markerClear",marker))
                         self.mapProcessQueue.put(("markerClear",f"{marker}Bounds"))
                 elif marker is Mark.FRIENDLY or marker == "friendly":
                     if self.markSettings.ReturnSettings("visible_friendly")["visible_friendly"].get() == "1" or self.markSettings.ReturnSettings("visible_friendlyBounds")["visible_friendlyBounds"].get() =="1":
-                        fetchedJson["FRIENDLY"] = self.UIMaster.castJson.Load(JsonSource.FRIENDLY)
-                        if fetchedJson["FRIENDLY"] != {}:
-                            if self.markSettings.ReturnSettings("visible_friendly")["visible_friendly"].get() == "1":
-                                self.mapProcessQueue.put(("markerUpdate",Mark.FRIENDLY,fetchedJson))
-                            else:
-                                self.mapProcessQueue.put(("markerClear",Mark.FRIENDLY))
-                            if self.markSettings.ReturnSettings("visible_friendlyBounds")["visible_friendlyBounds"].get() =="1":
-                                self.mapProcessQueue.put(("markerUpdate",Mark.FRIENDLY_BOUNDS,fetchedJson))
-                            else:
-                                self.mapProcessQueue.put(("markerClear",Mark.FRIENDLY_BOUNDS))
+                        if self.markSettings.ReturnSettings("visible_friendly")["visible_friendly"].get() == "1":
+                            self.mapProcessQueue.put(("markerUpdate",Mark.FRIENDLY))
                         else:
                             self.mapProcessQueue.put(("markerClear",Mark.FRIENDLY))
+                        if self.markSettings.ReturnSettings("visible_friendlyBounds")["visible_friendlyBounds"].get() =="1":
+                            self.mapProcessQueue.put(("markerUpdate",Mark.FRIENDLY_BOUNDS))
+                        else:
                             self.mapProcessQueue.put(("markerClear",Mark.FRIENDLY_BOUNDS))
                     else:
                         self.mapProcessQueue.put(("markerClear",Mark.FRIENDLY))
                         self.mapProcessQueue.put(("markerClear",Mark.FRIENDLY_BOUNDS))
                 elif marker in [Mark.FPF_BOUNDS,Mark.LR_BOUNDS,Mark.XY_BOUNDS,Mark.GROUP_BOUNDS,Mark.FRIENDLY_BOUNDS,Mark.NOFLY_BOUNDS]:
-                    if marker in [Mark.FRIENDLY_BOUNDS]:
-                        fetchedJson["FRIENDLY"] = self.UIMaster.castJson.Load(JsonSource.FRIENDLY)
-                    else:
-                        fetchedJson["IDFP"] = self.UIMaster.castJson.Load(JsonSource.IDFP)
-                        fetchedJson["TARGET"] = self.UIMaster.castJson.Load(JsonSource.TARGET)
-                        fetchedJson["FIREMISSION"] = self.UIMaster.castJson.Load(JsonSource.FIREMISSION)
                     if self.markSettings.ReturnSettings(f"visible_{marker}")[f"visible_{marker}"].get()=="1":
-                        self.mapProcessQueue.put(("markerUpdate",marker,fetchedJson))
+                        self.mapProcessQueue.put(("markerUpdate",marker))
                     else:
                         self.mapProcessQueue.put(("markerClear",marker))
 
@@ -1271,8 +1264,16 @@ class CustomToolbar(NavigationToolbar2Tk):
                 self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to load JSON: {str(e)}")
         for markInList in markerList:
             threading.Thread(target=lambda mark = markInList: FetchMarker(mark),daemon=True).start()
+            # if hasattr(self,"thread"):
+            #     if not self.thread.is_alive():
+            #         self.thread = threading.Thread(target=lambda mark = markInList: FetchMarker(mark),daemon=True)
+            #         self.thread.start()
+            # else:
+            #     self.thread = threading.Thread(target=lambda mark = markInList: FetchMarker(mark),daemon=True)
+            #     self.thread.start()
         if marker is None:
             self.mainWidget.markerUpdateEvent = self.root.after(self.mainWidget.mapDelay,self.MapUpdate)
+
     def _Button(self, text, image_file, toggle, command):
         b = super()._Button(text, image_file, toggle, command)
         b.pack(side=TOP)
@@ -1360,7 +1361,7 @@ class CustomToolbar(NavigationToolbar2Tk):
             elif self.mode == Mode.LR:
                 selection = "LR Target"
             elif self.mode == Mode.XY:
-                selection = "LR Target"
+                selection = "XY Target"
             elif self.mode == Mode.QUICK:
                 selection = "Snapshot Target"
             elif self.mode == Mode.REFERENCE:
@@ -1386,7 +1387,7 @@ class CustomToolbar(NavigationToolbar2Tk):
             self.contextWindow.grid_rowconfigure(0,weight=1)
             self.contextFrame = ttk.Frame(self.contextWindow,padding=10,relief="groove")
             self.contextFrame.action = None
-            self.toolbarContext = ToolbarContextWindow(self.contextFrame,self.toolBarIconPath,self,self.MapUpdate,self.markSettings.ReturnSettings().items())
+            self.toolbarContext = ToolbarContextWindow(self.contextFrame,self.toolBarIconPath,self,self.markSettings.ReturnSettings().items())
             if self.mode == Mode.FPF: self.toolbarContext.FPF()
             elif self.mode == Mode.LR: self.toolbarContext.LR()
             elif self.mode == Mode.XY: self.toolbarContext.XY()
@@ -1401,7 +1402,7 @@ class CustomToolbar(NavigationToolbar2Tk):
                 self.contextToplevel.title("LR Target")
                 self.toolbarContext.LR()
             elif self.mode == Mode.XY:
-                self.contextToplevel.title("LR Target")
+                self.contextToplevel.title("XY Target")
                 self.toolbarContext.XY()
             elif self.mode == Mode.QUICK:
                 self.contextToplevel.title("Snapshot Target")
@@ -1447,7 +1448,7 @@ class CustomToolbar(NavigationToolbar2Tk):
                                 i.remove()
                         self.markDictionary[markerType] = {}
     
-    def SetMarkers(self,markerType: Mark | list,fetchedJson):
+    def SetMarkers(self,markerType: Mark | list):
         def IDFPS(idfp):
             for idfp, details in idfp.items():
                 x = int(details["GridX"]) if len(details["GridX"]) == 5 else int(details["GridX"] + "0")
@@ -1530,27 +1531,28 @@ class CustomToolbar(NavigationToolbar2Tk):
                         self.markDictionary[targetType+"Bounds"].append(axBound)
         def NoFlyZones(fireMissions,targets,idfpDetails,IDFP: str | None = None,target: str | None = None,bounds = False):
             if bounds:
-                idfpList = []
-                if IDFP is None:
-                    for key in fireMissions.keys():
-                        idfpList.append(key)
-                else:
-                    idfpList = [IDFP]
-                for idfp in idfpList:
-                    gridX = int(idfpDetails[idfp]["GridX"]) if len(idfpDetails[idfp]["GridX"]) == 5 else int(idfpDetails[idfp]["GridX"] + "0")
-                    gridY = int(idfpDetails[idfp]["GridY"]) if len(idfpDetails[idfp]["GridY"]) == 5 else int(idfpDetails[idfp]["GridY"] + "0")
-                    if target is None:
-                        for targetName,details in fireMissions[idfp].items():
-                            targetName = targetName.split("-")
-                            x = int(targets[targetName[0]][targetName[1]]["GridX"]) if len(targets[targetName[0]][targetName[1]]["GridX"]) == 5 else int(targets[targetName[0]][targetName[1]]["GridX"] + "0")
-                            y = int(targets[targetName[0]][targetName[1]]["GridY"]) if len(targets[targetName[0]][targetName[1]]["GridY"]) == 5 else int(targets[targetName[0]][targetName[1]]["GridY"] + "0")
-                            marking = MapMarking((x,y),self.ax,self.markSettings.ReturnSettings("size_noflyBounds")["size_noflyBounds"].get())
-                            width = float(details["DeviationWidth"])+25 if "DeviationWidth" in details.keys() else 25
-                            depth = float(details["DeviationLength"])+25 if "DeviationLength" in details.keys() else 25
-                            axBound = marking.Bounds("orthogonal",{"Width":width,"Depth":depth,"Origin":(gridX,gridY)},self.markSettings.ReturnSettings("linestyle_noflyBounds")["linestyle_noflyBounds"].get(),"#BB0000",self.markSettings.ReturnSettings("double_linestyle_noflyBounds")["double_linestyle_noflyBounds"].get(),self.markSettings.ReturnSettings("double_side_noflyBounds")["double_side_noflyBounds"].get(),noflyZone=True)
-                            if Mark.NOFLY_BOUNDS not in self.markDictionary:
-                                self.markDictionary[Mark.NOFLY_BOUNDS] = []
-                            self.markDictionary[Mark.NOFLY_BOUNDS].append(axBound)
+                if fireMissions != {} and targets != {}:
+                    idfpList = []
+                    if IDFP is None:
+                        for key in fireMissions.keys():
+                            idfpList.append(key)
+                    else:
+                        idfpList = [IDFP]
+                    for idfp in idfpList:
+                        gridX = int(idfpDetails[idfp]["GridX"]) if len(idfpDetails[idfp]["GridX"]) == 5 else int(idfpDetails[idfp]["GridX"] + "0")
+                        gridY = int(idfpDetails[idfp]["GridY"]) if len(idfpDetails[idfp]["GridY"]) == 5 else int(idfpDetails[idfp]["GridY"] + "0")
+                        if target is None:
+                            for targetName,details in fireMissions[idfp].items():
+                                targetName = targetName.split("-")
+                                x = int(targets[targetName[0]][targetName[1]]["GridX"]) if len(targets[targetName[0]][targetName[1]]["GridX"]) == 5 else int(targets[targetName[0]][targetName[1]]["GridX"] + "0")
+                                y = int(targets[targetName[0]][targetName[1]]["GridY"]) if len(targets[targetName[0]][targetName[1]]["GridY"]) == 5 else int(targets[targetName[0]][targetName[1]]["GridY"] + "0")
+                                marking = MapMarking((x,y),self.ax,self.markSettings.ReturnSettings("size_noflyBounds")["size_noflyBounds"].get())
+                                width = float(details["DeviationWidth"])+25 if "DeviationWidth" in details.keys() else 25
+                                depth = float(details["DeviationLength"])+25 if "DeviationLength" in details.keys() else 25
+                                axBound = marking.Bounds("orthogonal",{"Width":width,"Depth":depth,"Origin":(gridX,gridY)},self.markSettings.ReturnSettings("linestyle_noflyBounds")["linestyle_noflyBounds"].get(),"#BB0000",self.markSettings.ReturnSettings("double_linestyle_noflyBounds")["double_linestyle_noflyBounds"].get(),self.markSettings.ReturnSettings("double_side_noflyBounds")["double_side_noflyBounds"].get(),noflyZone=True)
+                                if Mark.NOFLY_BOUNDS not in self.markDictionary:
+                                    self.markDictionary[Mark.NOFLY_BOUNDS] = []
+                                self.markDictionary[Mark.NOFLY_BOUNDS].append(axBound)
             else:
                 for missions in fireMissions.values():
                     for mission, details in missions.items():
@@ -1571,13 +1573,13 @@ class CustomToolbar(NavigationToolbar2Tk):
         if type(markerType) is not list:
             markerType = [markerType]
         if any(x in set(markerType) for x in ("all",Mark.IDFP,Mark.FPF,Mark.FPF,Mark.FPF_BOUNDS,Mark.LR,Mark.LR_BOUNDS,Mark.XY,Mark.XY_BOUNDS,Mark.GROUP,Mark.GROUP_BOUNDS,Mark.NOFLY,Mark.NOFLY_BOUNDS)):
-            idfps = fetchedJson["IDFP"]
+            idfps = self.UIMaster.oldLoaded[JsonSource.IDFP]
         if any(x in set(markerType) for x in ("all","FPF","FPFBounds","LR","LRBounds","XY","XYBounds","Group","GroupBounds","nofly","noflyBounds")):
-            targets = fetchedJson["TARGET"]
+            targets = self.UIMaster.oldLoaded[JsonSource.TARGET]
         if any(x in set(markerType) for x in ("all","FPF","FPFBounds","LR","LRBounds","XY","XYBounds","Group","GroupBounds","nofly","noflyBounds")):
-            fireMissions = fetchedJson["FIREMISSION"]
+            fireMissions = self.UIMaster.oldLoaded[JsonSource.FIREMISSION]
         if any(x in set(markerType) for x in ("all","friendly","friendlyBounds")):
-            friendlies = fetchedJson["FRIENDLY"]
+            friendlies = self.UIMaster.oldLoaded[JsonSource.FRIENDLY]
         for marker in markerType:
             if marker in ("all",Mark.IDFP):
                 IDFPS(idfps)
@@ -1966,7 +1968,7 @@ class CustomToolbar(NavigationToolbar2Tk):
             self.mode = Mode.NONE
 
 class ToolbarContextWindow():
-    def __init__(self,frame:ttk.Frame,toolBarIconPath,toolbar:CustomToolbar,MapUpdateFunction,*args):
+    def __init__(self,frame:ttk.Frame,toolBarIconPath,toolbar:CustomToolbar,*args):
         self.frame = frame
         self.toolBarIconPath = toolBarIconPath
         self.toolbar = toolbar
@@ -1976,7 +1978,6 @@ class ToolbarContextWindow():
         for stringVarName,stringVar in args[0]:
             setattr(self,stringVarName,stringVar)
         self.frame.marker = {}
-        self.MapUpdate = MapUpdateFunction
         self.markerDefinitions = {"IDFP": Mark.IDFP,
                                   "Friendly": Mark.FRIENDLY,
                                   "FPF": Mark.FPF,
@@ -2141,42 +2142,49 @@ class ToolbarContextWindow():
 
         def CalculatePressed():
             if len(snapshotIDFPCreation.idfpListbox.curselection()) != 0:
-                IDFPDict = self.toolbar.UIMaster.castJson.Load(source=JsonSource.IDFP)
-                IDFP = list(IDFPDict.keys())[snapshotIDFPCreation.idfpListbox.curselection()[0]]
-                solution = self.toolbar.UIMaster.target.CalculateSnapshot(IDFPDict,IDFP,np.ceil(float(self.fireMissionWidth.get())), np.ceil(float(self.fireMissionDepth.get())),self.snapPosX.get(),self.snapPosY.get(),float(self.snapHeight.get()),float(self.airTemperature.get()),float(self.airHumidity.get()),float(self.airPressure.get()),float(self.windDirection.get()),float(self.windMagnitude.get()),int(self.windDynamic.get()))
                 try:
-                    if int(np.round(float(self.fireMissionDepth))) >= 1:
-                        range = "{:04d} ± {} m".format(int(solution["Range"]), int(np.round(float(self.fireMissionDepth))))
-                except:
-                    range = "{:04d} m".format(int(solution["Range"]))
-                try:vertex = int(np.ceil(list(solution["Vertex"])[2]/5)*5)
-                except:vertex = solution["Vertex"]
-                if self.windDynamic.get() == "1":
-                    windCorrections = "± {} mils\n± {} mils".format(int(np.round(float(solution["PerpendicularCorrection"]))),int(np.round(float(solution["ParallelCorrection"]))))
-                else:
-                    windCorrections = "\n"
-                try:
-                    if float(self.fireMissionWidth.get()) >=1:
-                        azimuthDeviation = solution["Azimuth"]-solution["Left"] if (solution["Azimuth"]-solution["Left"]) > 0 else (solution["Azimuth"]-solution["Left"])+2*np.pi
-                        azimuth = "{:06.1f} ± {} mils\n\t⇐ {:04d} | {:04d} ⇒".format(solution["Azimuth"]*3200/np.pi,np.round(azimuthDeviation*3200/np.pi),int(np.round(solution["Left"]*3200/np.pi)),int(np.round(solution["Left"]*3200/np.pi)))
+                    calculateButton.config(state="disabled")
+                    IDFPDict = self.toolbar.UIMaster.castJson.Load(source=JsonSource.IDFP)
+                    IDFP = list(IDFPDict.keys())[snapshotIDFPCreation.idfpListbox.curselection()[0]]
+                    solution = self.toolbar.UIMaster.target.CalculateSnapshot(IDFPDict,IDFP,np.ceil(float(self.fireMissionWidth.get())), np.ceil(float(self.fireMissionDepth.get())),self.snapPosX.get(),self.snapPosY.get(),float(self.snapHeight.get()),float(self.airTemperature.get()),float(self.airHumidity.get()),float(self.airPressure.get()),float(self.windDirection.get()),float(self.windMagnitude.get()),int(self.windDynamic.get()))
+                    try:
+                        if int(np.round(float(self.fireMissionDepth))) >= 1:
+                            range = "{:04d} ± {} m".format(int(solution["Range"]), int(np.round(float(self.fireMissionDepth))))
+                    except:
+                        range = "{:04d} m".format(int(solution["Range"]))
+                    try:vertex = int(np.ceil(list(solution["Vertex"])[2]/5)*5)
+                    except:vertex = solution["Vertex"]
+                    if self.windDynamic.get() == "1":
+                        windCorrections = "± {} mils\n± {} mils".format(int(np.round(float(solution["PerpendicularCorrection"]))),int(np.round(float(solution["ParallelCorrection"]))))
                     else:
+                        windCorrections = "\n"
+                    try:
+                        if float(self.fireMissionWidth.get()) >=1:
+                            azimuthDeviation = solution["Azimuth"]-solution["Left"] if (solution["Azimuth"]-solution["Left"]) > 0 else (solution["Azimuth"]-solution["Left"])+2*np.pi
+                            azimuth = "{:06.1f} ± {} mils\n\t⇐ {:04d} | {:04d} ⇒".format(solution["Azimuth"]*3200/np.pi,np.round(azimuthDeviation*3200/np.pi),int(np.round(solution["Left"]*3200/np.pi)),int(np.round(solution["Right"]*3200/np.pi)))
+                        else:
+                            azimuth = "{:06.1f} mils\n".format(solution["Azimuth"]*3200/np.pi)
+                    except:
                         azimuth = "{:06.1f} mils\n".format(solution["Azimuth"]*3200/np.pi)
-                except:
-                    azimuth = "{:06.1f} mils\n".format(solution["Azimuth"]*3200/np.pi)
-                try:
-                    if float(self.fireMissionDepth.get()) >=1:
-                        elevation = "{:06.1f} ± {} mils\n⇓ {:04d} | {:04d} ⇑".format(solution["Elevation"],int(np.round(solution["Near"])),int(np.round(solution["Far"])))
-                    else:
+                    try:
+                        if float(self.fireMissionDepth.get()) >=1:
+                            elevation = "{:06.1f} ± {} mils\n⇓ {:04d} | {:04d} ⇑".format(solution["Elevation"],int(np.round(solution["Near"])),int(np.round(solution["Far"])))
+                        else:
+                            elevation = "{:06.1f} mils\n".format(solution["Elevation"])
+                    except:
                         elevation = "{:06.1f} mils\n".format(solution["Elevation"])
-                except:
-                    elevation = "{:06.1f} mils\n".format(solution["Elevation"])
-                outputSolution.config(text="{}\n{}\n{}\n{}\n{:0.1f}\nFL {}\n{}\n{}\n{}".format(solution["System"],IDFPDict[IDFP]["Trajectory"],range,solution["Charge"],float(solution["TOF"]),vertex,windCorrections,azimuth,elevation))
+                        print("{}\n{}\n{}\n{}\n{:0.1f}\nFL {}\n{:0.1f}° {:0.1f} m/s\n{}\n{}\n{}".format(solution["System"],IDFPDict[IDFP]["Trajectory"],range,solution["Charge"],float(solution["TOF"]),vertex,solution["ImpactAngle"],solution["ImpactSpeed"],windCorrections,azimuth,elevation))
+                    outputSolution.config(text="{}\n{}\n{}\n{}\n{:0.1f}\nFL {}\n{:0.1f}° {:0.1f} m/s\n{}\n{}\n{}".format(solution["System"],IDFPDict[IDFP]["Trajectory"],range,solution["Charge"],float(solution["TOF"]),vertex,solution["ImpactAngle"],solution["ImpactSpeed"],windCorrections,azimuth,elevation))
+                except Exception as e: self.toolbar.UIMaster.StatusMessageErrorDump(e,errorMessage="Failed to calculate snapshot")
+                finally:
+                    calculateButton.config(state="normal")
+                    self.frame.bell()
         inputLabelframe = ttk.LabelFrame(self.frame,text="Snapshot settings",padding=5)
         inputLabelframe.grid_columnconfigure((0),weight=1)
         outputLabelframe = ttk.LabelFrame(self.frame,text="Firing solution",padding=5)
         inputSeparator2 = ttk.Separator(inputLabelframe,orient="vertical")
         outputSeparator = ttk.Separator(outputLabelframe,orient="vertical")
-        outputLabels = ttk.Label(outputLabelframe,text="System\nTrajectory\nRange\nCharge\nTOF\nVertex\nCrosswind\nHead/Tailwind\nAzimuth\n\nElevation\n\n",justify="right",padding=3)
+        outputLabels = ttk.Label(outputLabelframe,text="System\nTrajectory\nRange\nCharge\nTOF\nVertex\nImpact\nCrosswind\nHead/Tailwind\nAzimuth\n\nElevation\n\n",justify="right",padding=3)
         outputSolution = ttk.Label(outputLabelframe,justify="left",padding=3)
         idfpLabelframe = ttk.Labelframe(inputLabelframe,text="IDFP")
         idfpLabelframe.columnconfigure(0,weight=1)
@@ -2316,10 +2324,9 @@ class ToolbarContextWindow():
             slideValue = StringVar(value=int(float(sizeVar.get())*4))
             if name != "Snapshot":
                 if len(visibleVar.trace_info()) == 1:
-                    changeTrace = visibleVar.trace_add("write",callback=lambda *args, n = name:self.MapUpdate(self.markerDefinitions[n]))
+                    changeTrace = visibleVar.trace_add("write",callback=lambda *args, n = name:self.toolbar.MapUpdate(self.markerDefinitions[n]))
                     visibleVar.changeTrace = changeTrace
-            # if slideValue.trace_info() == []:
-            #     changeTrace = slideValue.trace_add("write",callback=lambda *args:self.MapUpdate(self.markerDefinitions[name]))
+            sizeVar.trace_add("write",callback=lambda *args,n = name:self.toolbar.MapUpdate(self.markerDefinitions[n]))
             markerSizeLabel = ttk.Label(markerLabelframe,text=name,justify="right")
             if visibleVar is not None:
                 markerCheckbutton = ttk.Checkbutton(markerLabelframe,variable=visibleVar,offvalue="0",onvalue="1")
@@ -2332,11 +2339,11 @@ class ToolbarContextWindow():
                     if declutterVar.get() == "0":
                         declutterVar.set("1")
                         markerDeclutterLabel.config(background="lightgreen")
-                        self.MapUpdate(self.markerDefinitions[name])
+                        self.toolbar.MapUpdate(self.markerDefinitions[name])
                     elif declutterVar.get() == "1":
                         declutterVar.set("0")
                         markerDeclutterLabel.config(background=normalDeclutterBackground)
-                        self.MapUpdate(self.markerDefinitions[name])
+                        self.toolbar.MapUpdate(self.markerDefinitions[name])
                 markerDeclutterLabel = ttk.Label(markerLabelframe,text="DCLTR",relief="groove",padding=3)
                 normalDeclutterBackground = markerDeclutterLabel.cget("background")
                 markerDeclutterLabel.bind("<Button-1>",lambda *args:Declutter())
@@ -2358,10 +2365,9 @@ class ToolbarContextWindow():
         def BorderSetup(name:str,visibleVar:StringVar,sizeVar:StringVar,linestyleVar:StringVar,doubleLineStyleVar:StringVar,doubleLineSideVar:StringVar,row):
             slideValue = StringVar(value=int(float(sizeVar.get())*4))
             if visibleVar.trace_info() == []:
-                changeTrace = visibleVar.trace_add("write",callback=lambda *args:self.MapUpdate(self.borderDefinitions[name]))
+                changeTrace = visibleVar.trace_add("write",callback=lambda *args, n = name:self.toolbar.MapUpdate(self.borderDefinitions[n]))
                 visibleVar.changeTrace = changeTrace
-            # if slideValue.trace_info() == []:
-            #     slideValue.trace_add("write",callback=lambda *args:self.MapUpdate(self.borderDefinitions[name]))
+            sizeVar.trace_add("write",callback=lambda *args, n = name:self.toolbar.MapUpdate(self.borderDefinitions[n]))
             menu = Menu(self.toolbar.UIMaster.root,tearoff=False)
             def DropdownMenu(label:ttk.Label,menuType:Literal["linestyle","double"],stringVar,double = False):
                 def SetLabels(value):
