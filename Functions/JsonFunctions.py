@@ -23,15 +23,17 @@ class CastJson():
         self.UIMaster = UIMaster
         self.exeDir = exeDir
         self.appData_local = appData_local
-        """
-        message = "" #Saves to Json
-        privateMessage = None #Only appears on statusbar
-        """
+        self.fileNameDict = {
+            JsonSource.COMMON : "common",
+            JsonSource.IDFP : "idfp",
+            JsonSource.FRIENDLY: "friendly",
+            JsonSource.TARGET: "target",
+            JsonSource.FIREMISSION : "fireMissions",
+            JsonSource.MESSAGELOG: "message_log"
+            }
         self.jsonType = JsonType.LOCAL
-        # if self.jsonType == JsonType.LOCAL:
-        #     self.appData_local = appData_local
-        # elif self.jsonType == JsonType.SERVER:
-        #     self.authToken = None
+        self.loaded = {}
+        """Loaded Json files, to be used with unimportant operations"""
     def SyncAuthToken(self,authToken):
         self.authToken=authToken
         if authToken is not None:
@@ -43,90 +45,47 @@ class CastJson():
         if response.status_code!= 200:
             return f"{response.status_code}: {response.reason}"
         else:
-            jsonFile = ast.literal_eval(response.json()["data"])
+            jsonFile = json.loads(response.json()["data"]) if response.json()["data"] is not None else {}
+            if jsonFile is None:
+                if jsonName == "message_log":
+                    return {'message':''}
+                return {}
             return jsonFile
     def Load(self,source: JsonSource,localOverride = False,requestedSave = False) -> dict | str:
         """
         Loads and returns the Json data from the specified source. Takes the "json" arguement and uses the appropriate json source
         """
-        if self.jsonType == JsonType.LOCAL or localOverride == True or source == 6 or self.authToken is None:
+        if self.jsonType == JsonType.LOCAL or localOverride == True or source == JsonSource.ARTILLERYCONFIG or self.authToken is None:
             try:
-                if source == JsonSource.COMMON:
-                    with open(self.appData_local/"UKSF"/"CAST"/"common.json","r") as file:
-                        return json.load(file)
-                elif source == JsonSource.IDFP:
-                    with open(self.appData_local/"UKSF"/"CAST"/"IDFP.json","r") as file:
-                        return json.load(file)
-                elif source == JsonSource.FRIENDLY:
-                    with open(self.appData_local/"UKSF"/"CAST"/"Friendly.json","r") as file:
-                        return json.load(file)
-                elif source == JsonSource.TARGET:
-                    with open(self.appData_local/"UKSF"/"CAST"/"Targets.json","r") as file:
-                        return json.load(file)
-                elif source == JsonSource.FIREMISSION:
-                    with open(self.appData_local/"UKSF"/"CAST"/"FireMissions.json","r") as file:
-                        return json.load(file)
-                elif source == JsonSource.MESSAGELOG:
-                    with open(self.appData_local/"UKSF"/"CAST"/"Message_Log.json","r") as file:
-                        return str(json.load(file)["message"])
-                elif source == JsonSource.ARTILLERYCONFIG:
+                if source != JsonSource.ARTILLERYCONFIG:
+                    with open(self.appData_local/"UKSF"/"CAST"/f"{self.fileNameDict[source]}.json","r") as file:
+                        loadedDict = json.load(file)
+                        if requestedSave == False:
+                            self.loaded[source] = loadedDict
+                        return loadedDict if source != JsonSource.MESSAGELOG else str(loadedDict["message"])
+                else:
                     with open(self.exeDir/"Functions"/"ArtilleryConfigs.json",mode="r") as file:
                         return json.load(file)
             except Exception as e:
-                if source == JsonSource.COMMON:
-                    source = "Common parameters"
+                if source != JsonSource.ARTILLERYCONFIG:
                     try:
-                        with open(self.appData_local/"UKSF"/"CAST"/"common.json",mode="w") as f:
-                            json.dump({},f,indent=4)
+                        with open(self.appData_local/"UKSF"/"CAST"/f"{self.fileNameDict[source]}.json",mode="w") as f:
+                            if source != JsonSource.MESSAGELOG:
+                                json.dump({},f,indent=4)
+                            else:
+                                json.dump({"message":""},f,indent=4)
+                                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to load {self.fileNameDict[source]}, returning nothing")
+                                return ""
                     except: None
-                elif source == JsonSource.IDFP:
-                    source = "IDFP position data"
-                    try:
-                        with open(self.appData_local/"UKSF"/"CAST"/"IDFP.json","w") as f:
-                            json.dump({},f,indent=4)
-                    except: None
-                elif source == JsonSource.FRIENDLY:
-                    source = "Friendly position data"
-                    try:
-                        with open(self.appData_local/"UKSF"/"CAST"/"Friendly.json",mode="w") as f:
-                            json.dump({},f,indent=4)
-                    except: None
-                elif source == JsonSource.TARGET:
-                    source = "Target position data"
-                    try:
-                        with open(self.appData_local/"UKSF"/"CAST"/"Targets.json",mode="w") as f:
-                            json.dump({},f,indent=4)
-                    except: None
-                elif source == JsonSource.FIREMISSION:
-                    source = "Fire mission data"
-                    try:
-                        with open(self.appData_local/"UKSF"/"CAST"/"FireMissions.json",mode="w") as f:
-                            json.dump({},f,indent=4)
-                    except: None
-                elif source == JsonSource.MESSAGELOG:
-                    try:
-                        with open(self.appData_local/"UKSF"/"CAST"/"Message_Log.json",mode="w") as f:
-                            json.dump({"message":""},f,indent=4)
-                    except: None
-                    return ""
-                else: source = "Artillery Configurations"
-                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to load {source}, returning nothing")
+                else:
+                    self.UIMaster.StatusMessageErrorDump(e, errorMessage="Failed to load Artillery Configurations, returning nothing")
+                    return {}
+                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to load {self.fileNameDict[source]}, returning nothing")
                 return {}
                 
         elif self.jsonType ==JsonType.SERVER:
             try:
-                if source == JsonSource.COMMON:
-                    sourceJson = self._requestHandle("common")
-                elif source == JsonSource.IDFP:
-                    sourceJson = self._requestHandle("idfp")
-                elif source == JsonSource.FRIENDLY:
-                    sourceJson = self._requestHandle("friendly")
-                elif source == JsonSource.TARGET:
-                    sourceJson = self._requestHandle("target")
-                elif source == JsonSource.FIREMISSION:
-                    sourceJson = self._requestHandle("fireMissions")
-                elif source == JsonSource.MESSAGELOG:
-                    sourceJson = self._requestHandle("message_log")
+                sourceJson = self._requestHandle(self.fileNameDict[source])
                 if type(sourceJson) != str:
                     if source is JsonSource.MESSAGELOG:
                         return sourceJson["message"]
@@ -136,17 +95,12 @@ class CastJson():
                     if requestedSave:
                         return requests.RequestException
             except Exception as e:
-                if source == JsonSource.COMMON: source = "Common parameters"
-                elif source == JsonSource.IDFP: source = "IDFP position data"
-                elif source == JsonSource.FRIENDLY: source = "Friendly position data"
-                elif source == JsonSource.TARGET: source = "Target position data"
-                elif source == JsonSource.FIREMISSION: source = "Fire mission data"
-                elif source == JsonSource.MESSAGELOG:
+                if source == JsonSource.MESSAGELOG:
                     self.UIMaster.StatusMessageErrorDump(e, errorMessage="Failed load Message log, returning nothing",localOverride=True)
                     return ""
-                else: source = "Artillery Configurations"
-                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed load {source}, returning nothing",localOverride=True)
-                return {}
+                else:
+                    self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to load {self.fileNameDict[source]}, returning nothing",localOverride=True)
+                    return {}
             
     def Save(self,source: JsonSource,newEntry: dict | str, append = True,localOverride = False) -> bool:
         """
@@ -160,7 +114,7 @@ class CastJson():
                     if dataLoad is not requests.RequestException:
                         data = (dataLoad | newEntry)
                     else: return False
-                except TypeError: None
+                except TypeError: print("error")
             else:
                 try:
                     dataLoad = self.Load(source,localOverride,requestedSave=True)
@@ -171,62 +125,23 @@ class CastJson():
                     message = ""
                 data["message"] = message
         else:
-            if source == 5: data["message"] = str(newEntry)
+            if source == JsonSource.MESSAGELOG: data["message"] = str(newEntry)
             else: data = newEntry
+        self.loaded[source] = data
         if self.jsonType == JsonType.LOCAL or localOverride==True or self.authToken is None:
             try:
-                if source == 0:
-                    with open(self.appData_local/"UKSF"/"CAST"/"common.json","w") as file:
-                        json.dump(data,file,indent=4)
-                elif source == 1:
-                    with open(self.appData_local/"UKSF"/"CAST"/"IDFP.json","w") as file:
-                        json.dump(data,file,indent=4)
-                elif source == 2:
-                    with open(self.appData_local/"UKSF"/"CAST"/"Friendly.json","w") as file:
-                        json.dump(data,file,indent=4)
-                elif source == 3:
-                    with open(self.appData_local/"UKSF"/"CAST"/"Targets.json","w") as file:
-                        json.dump(data,file,indent=4)
-                elif source == 4:
-                    with open(self.appData_local/"UKSF"/"CAST"/"FireMissions.json","w") as file:
-                        json.dump(data,file,indent=4)
-                elif source == 5:
-                    with open(self.appData_local/"UKSF"/"CAST"/"Message_Log.json","w") as file:
-                        json.dump(data,file,indent=4)
+                with open(self.appData_local/"UKSF"/"CAST"/f"{self.fileNameDict[source]}.json","w") as file:
+                    json.dump(data,file,indent=4)
                 return True
             except Exception as e:
-                if source == 0: source = "Common parameters"
-                elif source == 1: source = "IDFP position data"
-                elif source == 2: source = "Friendly position data"
-                elif source == 3: source = "Target position data"
-                elif source == 4: source = "Fire mission data"
-                elif source == 5: source = "Message log"
-                else: source = "Artillery Configurations"
-                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to save {source}, returning False")
+                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to save {self.fileNameDict[source]}, returning False")
                 return False
         elif self.jsonType ==JsonType.SERVER:
             try:
-                if source == 0:
-                    return requests.put(url="https://api.uk-sf.co.uk/artillery/common",headers={"Authorization":"Bearer " + self.authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-                if source == 1:
-                    return requests.put(url="https://api.uk-sf.co.uk/artillery/idfp",headers={"Authorization":"Bearer " + self.authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-                if source == 2:
-                    return requests.put(url="https://api.uk-sf.co.uk/artillery/friendly",headers={"Authorization":"Bearer " + self.authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-                if source == 3:
-                    return requests.put(url="https://api.uk-sf.co.uk/artillery/target",headers={"Authorization":"Bearer " + self.authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-                if source == 4:
-                    return requests.put(url="https://api.uk-sf.co.uk/artillery/fireMissions",headers={"Authorization":"Bearer " + self.authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
-                if source == 5:
-                    return requests.put(url="https://api.uk-sf.co.uk/artillery/message_log",headers={"Authorization":"Bearer " + self.authToken["token"],"Content-Type": "application/json"},json={"data": str(data)})
+                response = requests.put(url=f"https://api.uk-sf.co.uk/artillery/{self.fileNameDict[source]}",headers={"Authorization":"Bearer " + self.authToken["token"],"Content-Type": "application/json"},json={"data":json.dumps(data)})
+                return response
             except Exception as e:
-                if source == JsonSource.COMMON: source = "Common parameters"
-                elif source == JsonSource.IDFP: source = "IDFP position data"
-                elif source == JsonSource.FRIENDLY: source = "Friendly position data"
-                elif source == JsonSource.TARGET: source = "Target position data"
-                elif source == JsonSource.FIREMISSION: source = "Fire mission data"
-                elif source == JsonSource.MESSAGELOG: source = "Message log"
-                else: source = "Artillery Configurations"
-                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to save {source}, returning False",localOverride=True)
+                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to save {self.fileNameDict[source]}, returning False",localOverride=True)
                 return False
     def Delete(self,source:JsonSource, deleteKey: str | list | tuple | None = None, localOverride = False) -> bool:
         """
@@ -245,16 +160,8 @@ class CastJson():
             self.Save(source,data,False,localOverride)
             return True
         except Exception as e:
-                if source == JsonSource.COMMON: source = "Common parameters"
-                elif source == JsonSource.IDFP: source = "IDFP position data"
-                elif source == JsonSource.FRIENDLY: source = "Friendly position data"
-                elif source == JsonSource.TARGET: source = "Target position data"
-                elif source == JsonSource.FIREMISSION: source = "Fire mission data"
-                elif source == JsonSource.MESSAGELOG: source = "Message log"
-                else: source = "Artillery Configurations"
-                self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to delete {source}, returning False")
-                return False
-        
+            self.UIMaster.StatusMessageErrorDump(e, errorMessage=f"Failed to delete {self.fileNameDict[source]}, returning False")
+            return False
 
 class UksfAccounts():
     def __init__(self,UIMaster):

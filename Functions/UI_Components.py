@@ -262,7 +262,7 @@ class IDFPCreation(UIComponentBase):
 
     def InitialiseIDFPList(self):
         try:
-            oldLoadedIDFPs = list(self.UIMaster.castJson.Load(source=JsonSource.IDFP).keys())
+            oldLoadedIDFPs = list(self.UIMaster.oldLoaded[JsonSource.IDFP].keys())
             self.idfpListBoxContents.set(oldLoadedIDFPs)
             self.idfpNameCombobox.config(values = oldLoadedIDFPs)
         except Exception as e:
@@ -304,7 +304,7 @@ class IDFPCreation(UIComponentBase):
                         "Trajectory" : traj
                     }
                 }
-                try: self.UIMaster.castJson.Load(source=JsonSource.IDFP)[self.idfpName.get()]
+                try: self.UIMaster.oldLoaded[JsonSource.IDFP][self.idfpName.get()]
                 except KeyError: update = False
                 except Exception as e:
                     self.UIMaster.StatusMessageErrorDump(e,"Error searching for the IDFP in json")
@@ -657,7 +657,7 @@ class Friendlies(UIComponentBase):
                         "Dispersion" : dispersion
                     }
                 }
-                try: self.UIMaster.castJson.Load(source=JsonSource.FRIENDLY)[self.friendlyName.get()]
+                try: self.UIMaster.oldLoaded[JsonSource.FRIENDLY][self.friendlyName.get()]
                 except KeyError: update = False
                 except Exception as e:
                     self.UIMaster.StatusMessageErrorDump(e,"Error searching for the friendly position in json")
@@ -799,7 +799,7 @@ class TargetCreation(UIComponentBase):
                 if prefix == "FPF":
                     self.UIMaster.target.CreateCheckBoxList(self.UIMaster.target.targetListFPFCanvasFrame,{key: self.UIMaster.target.targetListCheckBoxStates[prefix][key] for key in sorted_items},self.UIMaster.target.targetSeriesDict[prefix])
                 prefixTargetList = {}
-                try: prefixTargetList[prefix] = self.UIMaster.castJson.Load(source=JsonSource.TARGET)[prefix]
+                try: prefixTargetList[prefix] = self.UIMaster.oldLoaded[JsonSource.TARGET][prefix]
                 except: prefixTargetList[prefix] = {}
                 mutator = "None"
                 orientation = "None"
@@ -1207,8 +1207,8 @@ class TargetDetails(UIComponentBase):
             targets[prefix][target]["Time"]["Second"] = int(self.fireMissionSecond.get())
             return targets,fireMissions
             
-        targets = self.UIMaster.castJson.Load(source=JsonSource.TARGET)
-        fireMissions = self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)
+        targets = self.UIMaster.oldLoaded[JsonSource.TARGET]
+        fireMissions = self.UIMaster.oldLoaded[JsonSource.FIREMISSION]
         for target, (edit, calculate) in self.UIMaster.target.targetListCheckBoxStates["LR"].items():
             if edit.get() == True:
                 targets,fireMissions = SaveSettings("LR",target,targets,fireMissions)
@@ -1241,7 +1241,7 @@ class TargetDetails(UIComponentBase):
             self.UIMaster.target.targetListCheckBoxStates["Group"][newItem] = (BooleanVar(),BooleanVar(value=True))
             self.UIMaster.target.CreateCheckBoxList(self.UIMaster.target.targetListGroupCanvasFrame,self.UIMaster.target.targetListCheckBoxStates["Group"],None,GroupSelection=True)
             groupTargetList = {}
-            try: groupTargetList["Group"] = self.UIMaster.castJson.Load(source=JsonSource.TARGET)["Group"]
+            try: groupTargetList["Group"] = self.UIMaster.oldLoaded[JsonSource.TARGET]["Group"]
             except: groupTargetList["Group"] = {}
             try: int(self.fireMissionGroupSpacing.get())
             except Exception as e:
@@ -1548,7 +1548,7 @@ class Clock(UIComponentBase):
         if offset.isspace() == False or offset != "0":
             try: self.clockHandOffset = float(offset)
             except ValueError:
-                try: self.clockHandOffset = float(self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)[self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][offset]["TOF"])
+                try: self.clockHandOffset = float(self.UIMaster.oldLoaded[JsonSource.FIREMISSION][self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][offset]["TOF"])
                 except: return False
             except: None
         else:
@@ -1873,7 +1873,7 @@ class Targets(UIComponentBase):
                 self.UIMaster.targetDetail.fireMissionGroupSelectionLabelframe.grid_remove()
 
     def FireMissionEdit(self,*args):
-        targets = self.UIMaster.castJson.Load(source=JsonSource.TARGET)
+        targets = self.UIMaster.oldLoaded[JsonSource.TARGET]
         for target, (edit, calculate) in self.targetListCheckBoxStates["LR"].items():
             if edit.get() == True:
                 self.FireMissionEditPasteSettings("LR",target,targets)
@@ -1998,12 +1998,12 @@ class Targets(UIComponentBase):
         def CopyGrid(widget: Widget,text,prefix):
             try:
                 if widget.winfo_exists():
-                    loadedTarget = self.UIMaster.castJson.Load(source=JsonSource.TARGET)[prefix][widget.cget("text")]
+                    loadedTarget = self.UIMaster.oldLoaded[JsonSource.TARGET][prefix][widget.cget("text")]
                     grid = loadedTarget["GridX"]+loadedTarget["GridY"]
                     pyperclip.copy(grid)
                     text = widget.cget("text")
                 else:
-                    loadedTarget = self.UIMaster.castJson.Load(source=JsonSource.TARGET)[prefix][text]
+                    loadedTarget = self.UIMaster.oldLoaded[JsonSource.TARGET][prefix][text]
                     grid = loadedTarget["GridX"]+loadedTarget["GridY"]
                     pyperclip.copy(grid)
                 self.UIMaster.StatusMessageLog(privateMessage=f"Copied {prefix}-{text} grid {grid} to clipboard")
@@ -2012,11 +2012,11 @@ class Targets(UIComponentBase):
         def ClockSplashOffset(widget: Widget,text,prefix):
             try:
                 if widget.winfo_exists():
-                    self.UIMaster.clock.clockHandOffset = (float(self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)[self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][f"{prefix}-{widget.cget('text')}"]["TOF"]))
+                    self.UIMaster.clock.clockHandOffset = (float(self.UIMaster.oldLoaded[JsonSource.FIREMISSION][self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][f"{prefix}-{widget.cget('text')}"]["TOF"]))
                     textTemp = widget.cget("text")
                     self.UIMaster.clock.clockOffsetStrVar.set(f"{prefix}-{textTemp}")
                 else:
-                    self.UIMaster.clock.clockHandOffset = (float(self.UIMaster.castJson.Load(source=JsonSource.FIREMISSION)[self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][text]["TOF"]))
+                    self.UIMaster.clock.clockHandOffset = (float(self.UIMaster.oldLoaded[JsonSource.FIREMISSION][self.UIMaster.fireMission.fireMissionNotebook.tab(self.UIMaster.fireMission.fireMissionNotebook.select(),"text")][text]["TOF"]))
                     self.UIMaster.clock.clockOffsetStrVar.set(text)
             except KeyError: self.UIMaster.StatusMessageLog(message=f"Calculated Fire Mission {prefix}-{text} is not found or calculated")
             except Exception as e: self.UIMaster.StatusMessageErrorDump(e,errorMessage=f"Failed to send Clock splash offset from {prefix}-{text}")
@@ -2517,7 +2517,6 @@ class FireMissions(UIComponentBase):
     def SyncFireMissions(self,newFireMissions):
         if newFireMissions != self.preSortedFireMissions or self.fireMissionWindowOpen:
             self.preSortedFireMissions = newFireMissions
-            print(newFireMissions)
             self.fireMissions = self.SortFireMissions(newFireMissions)
             self.FireMissionTab(self.fireMissions)
             self.FireMissionDisplayUpdate(self.fireMissions)
