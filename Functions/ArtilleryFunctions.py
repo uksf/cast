@@ -163,10 +163,11 @@ def DirectTrajectory(velocity,elevation,Rho,Wx,Wz,targetDistance,artyHeight,mass
     t=0 #initial time
     dataSet = [] #empty list
     data = []
-    while (Vx>0 or x<targetDistance): #while round is below the target
-        data = delta(deltaT,Vx,Vy,Vz,x,y,z,t,Rho,Wx,Wz,mass,dragCoef,crossArea) #calling a new step to be made
-        dataSet.append(data) #appending the new line of data to the list
-        Vx,Vy,Vz,x,y,z,t = data[3],data[4],data[5],data[6],data[7],data[8],data[9] #reasigning old variables to the new set
+    while t < 180:
+        while (Vx>0 or x<targetDistance): #while round has not reaches target
+            data = delta(deltaT,Vx,Vy,Vz,x,y,z,t,Rho,Wx,Wz,mass,dragCoef,crossArea) #calling a new step to be made
+            dataSet.append(data) #appending the new line of data to the list
+            Vx,Vy,Vz,x,y,z,t = data[3],data[4],data[5],data[6],data[7],data[8],data[9] #reasigning old variables to the new set
     dataSet = np.array(dataSet).T #transposed to make each row a new instance
     return(dataSet) #Returns all accelerations, velocites, positions and times the round has achieved
 def AirDensity(humidity: float,temp:float,pressure:float):
@@ -607,7 +608,81 @@ def Prediction(baseDir,system,charge,fireAngle,distance, heightDifference,airDen
     predElev = np.polyval(polyElev,distance+distanceDensityCorr+heightCorrection)
     return predElev
 
-def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tgtY:str,artyHeight=float(0),targetHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False):
+def DivergeantFallback(initElev,targetDistance,charge,system,airDensity,windDict,targetHeight,artyHeight,fireAngle):
+            print(charge)
+            elev = initElev
+            iterations = 0
+            trajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=elev-1,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+            deltaDistance = targetDistance - trajectory[6][-1]
+            oldTraj, oldElev = trajectory,elev-1
+            while abs(deltaDistance) > accuracy and iterations <20:
+                trajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=elev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+                deltaDistance = targetDistance - trajectory[6][-1]
+                newElev = elev + deltaDistance * (elev - oldElev) / (trajectory[6][-1] - oldTraj[6][-1])
+                oldTraj, oldElev = trajectory,elev
+                elev = newElev
+                iterations +=1
+            if abs(deltaDistance) >= accuracy and iterations == 20:
+                print("charge increase")
+                charge += 1
+                elev, trajectory, charge = DivergeantFallback(initElev,targetDistance,charge,system,airDensity,windDict,targetHeight,artyHeight,fireAngle)
+            return oldElev, trajectory, charge
+
+def ConvergeantSolution(charge,baseDir,system,fireAngle,distance,targetHeight,artyHeight,airDensity,windDict,forcedCharge = False):
+            print(distance)
+            predictElev = Prediction(baseDir=baseDir,system=system,charge=charge,fireAngle=fireAngle,distance=distance,heightDifference=targetHeight-artyHeight,airDensity=airDensity)
+            if predictElev <-100 or predictElev > 1450:
+                if forcedCharge:
+                    if fireAngle == "High":
+                        predictElev, trajectory, charge = DivergeantFallback(1050,distance,charge,system,airDensity,windDict,targetHeight,artyHeight,fireAngle)
+                    else:
+                        predictElev, trajectory, charge = DivergeantFallback(350,distance,charge,system,airDensity,windDict,targetHeight,artyHeight,fireAngle)
+                    return predictElev, trajectory, charge
+                charge = Charge(system,fireAngle,distance)
+                predictElev = Prediction(baseDir=baseDir,system=system,charge=charge,fireAngle=fireAngle,distance=distance,heightDifference=targetHeight-artyHeight,airDensity=airDensity)
+            trajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=predictElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+            try: deltaDistance = distance - trajectory[6][-1]
+            except: return ValueError
+            iterations = 0
+            oldDistance = distance
+            while abs(deltaDistance) > accuracy and iterations <20: #Convergent method
+                predictElev = Prediction(baseDir=baseDir,system=system,charge=charge,fireAngle=fireAngle,distance=oldDistance+deltaDistance,heightDifference=targetHeight-artyHeight,airDensity=airDensity)
+                if predictElev <-100 or predictElev > 1450:
+                    if forcedCharge:
+                        if fireAngle == "High":
+                            predictElev, trajectory, charge = DivergeantFallback(1050,distance,charge,system,airDensity,windDict,targetHeight,artyHeight,fireAngle)
+                        else:
+                            predictElev, trajectory, charge = DivergeantFallback(350,distance,charge,system,airDensity,windDict,targetHeight,artyHeight,fireAngle)
+                        return predictElev, trajectory, charge
+                    charge = Charge(system,fireAngle,distance)
+                    predictElev = Prediction(baseDir=baseDir,system=system,charge=charge,fireAngle=fireAngle,distance=distance,heightDifference=targetHeight-artyHeight,airDensity=airDensity)
+                trajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=predictElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+                oldDistance += deltaDistance
+                deltaDistance = distance-trajectory[6][-1]
+                iterations +=1
+            if abs(deltaDistance) >= accuracy and iterations == 20: #Divergent backup method
+                if fireAngle == "High":
+                    predictElev, trajectory, charge = DivergeantFallback(1050,distance,charge,system,airDensity,windDict,targetHeight,artyHeight,fireAngle)
+                else:
+                    predictElev, trajectory, charge = DivergeantFallback(350,distance,charge,system,airDensity,windDict,targetHeight,artyHeight,fireAngle)
+                #return RecursionError
+                #FALLBACK METHOD NEEDED
+            # print(trajectory.T[-1],"\n",Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=predictElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get()).T[-1])
+            return predictElev, trajectory, charge
+
+def DirectSolution(initElev,targetDistance,system,airDensity,windDict,distance,artyHeight,targetHeight):
+    initElev = 100
+    iterations = 0
+    trajectory = DirectTrajectory(velocity=SystemInfo(system=system).get()["charge"].keys()[-1],elevation=initElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetDistance=distance,artyHeight=artyHeight,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+    deltaHeight = targetHeight-trajectory[7][-1]
+    if deltaHeight > 0:
+        initElev += 50
+    else:
+        initElev -=50
+    trajectory = DirectTrajectory(velocity=SystemInfo(system=system).get()["charge"].keys()[-1],elevation=initElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetDistance=distance,artyHeight=artyHeight,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+
+
+def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tgtY:str,artyHeight=float(0),targetHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,forceCharge = False):
     """
     Define artillery and target positions, fire angle and system
 
@@ -638,73 +713,27 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
     bearing = Bearing(artyX,artyY,tgtX,tgtY,xFlip, yFlip)
     if charge < 0 and fireAngle!="Direct":
         charge = Charge(system,fireAngle,distance)
+    elif charge < 0 and fireAngle =="Direct":
+        charge = SystemInfo(system=system).get()["charge"].keys()[-1]
     if windDynamic == 0:
         windDict=Wind(bearing,windDirection,windMagnitude)
     else:
         windDict={"Tailwind" : 0,"Crosswind": 0}
+    print(charge)
     if fireAngle != "Direct":
-        def DivergeantFallback(initElev,targetDistance,charge):
-            elev = initElev
-            iterations = 0
-            trajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=elev-1,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
-            deltaDistance = targetDistance - trajectory.T[-1][6]
-            oldTraj, oldElev = trajectory,elev
-            while abs(deltaDistance) > accuracy and iterations <20:
-                trajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=elev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
-                deltaDistance = targetDistance - trajectory.T[-1][6]
-                newElev = (elev - oldElev)/(trajectory.T[-1][6]-oldTraj.T[-1][6])*deltaDistance
-                oldTraj, oldElev = trajectory,elev
-                elev = newElev
-                iterations +=1
-            if abs(deltaDistance) >= accuracy and iterations == 20:
-                charge += 1
-                elev, trajectory, charge = DivergeantFallback(initElev,targetDistance,charge)
-            
-            return elev, trajectory, charge
-        def ConvergeantSolution(charge):
-            predictElev = Prediction(baseDir=baseDir,system=system,charge=charge,fireAngle=fireAngle,distance=distance,heightDifference=targetHeight-artyHeight,airDensity=airDensity)
-            if predictElev <-100 or predictElev > 1450:
-                charge = Charge(system,fireAngle,distance)
-                predictElev = Prediction(baseDir=baseDir,system=system,charge=charge,fireAngle=fireAngle,distance=distance,heightDifference=targetHeight-artyHeight,airDensity=airDensity)
-            trajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=predictElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
-            try: deltaDistance = distance - trajectory.T[-1][6]
-            except: return ValueError
-            iterations = 0
-            oldDistance = distance
-            while abs(deltaDistance) > accuracy and iterations <20: #Convergent method
-                predictElev = Prediction(baseDir=baseDir,system=system,charge=charge,fireAngle=fireAngle,distance=oldDistance+deltaDistance,heightDifference=targetHeight-artyHeight,airDensity=airDensity)
-                if predictElev <-100 or predictElev > 1450:
-                    charge = Charge(system,fireAngle,distance)
-                    predictElev = Prediction(baseDir=baseDir,system=system,charge=charge,fireAngle=fireAngle,distance=distance,heightDifference=targetHeight-artyHeight,airDensity=airDensity)
-                trajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=predictElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
-                oldDistance += deltaDistance
-                deltaDistance = distance-trajectory.T[-1][6]
-                iterations +=1
-            if abs(deltaDistance) >= accuracy and iterations == 20: #Divergent backup method
-                if fireAngle == "High":
-                    predictElev, trajectory, charge = DivergeantFallback(1050,distance,charge)
-                else:
-                    predictElev, trajectory, charge = DivergeantFallback(350,distance,charge)
-                #return RecursionError
-                #FALLBACK METHOD NEEDED
-            return predictElev, trajectory, charge
-        elevation, trajectory, charge = ConvergeantSolution(charge)
-        collisionAvoidance = []
-        projectileTime = 0
+        elevation, trajectory, charge = ConvergeantSolution(charge,baseDir,system,fireAngle,distance,targetHeight,artyHeight,airDensity,windDict,forceCharge)
     else:
-        initElev = 0
-        iterations = 0
-        trajectory = DirectTrajectory(velocity=SystemInfo(system=system).get()["charge"].keys()[-1],elevation=initElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetDistance=distance,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
-        deltaHeight = targetHeight-trajectory[6][-1]
-
+        elevation,trajectory, charge = DirectSolution(distance,charge)
+    collisionAvoidance = []
+    projectileTime = 0
     for projectile in trajectory.T:
-        if projectile[7] < maxHeight and projectileTime+0.02 < projectile[9] and projectile[9] < trajectory.T[9][-1]-0.01:
+        if projectile[7] < maxHeight and projectileTime+0.02 < projectile[9] and projectile[9] < trajectory[9][-1]-0.01:
             collisionAvoidance.append((projectile[6],projectile[8],projectile[7]))
             projectileTime = projectile[9]
     
 
     def Azimuth():
-        angle = np.arctan(trajectory.T[-1][8]/trajectory.T[-1][6])
+        angle = np.arctan(trajectory[8][-1]/trajectory[6][-1])
         if bearing-angle < 0:           return (bearing-angle+2*np.pi)
         elif bearing-angle > 2*np.pi:   return (bearing-angle-2*np.pi)
         else:                           return (bearing-angle)
@@ -720,7 +749,9 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
         "Azimuth" : azimuth,
         "Vertex" : Vertex(),
         "Charge" : charge,
-        "TOF" : trajectory.T[-1][9],
+        "TOF" : trajectory[9][-1],
+        "ImpactAngle":-np.rad2deg(np.arctan2(trajectory[4][-1],trajectory[3][-1])),
+        "ImpactSpeed":np.sqrt((trajectory[3][-1]*trajectory[3][-1])+(trajectory[4][-1]*trajectory[4][-1])+(trajectory[5][-1]*trajectory[5][-1])),
         "System" : system,
         "FireAngle" : fireAngle,
         "WindDirection" : windDirection,
@@ -732,10 +763,10 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
     }
     if windDynamic == 1:
         perpendicularTrajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=elevation,Rho=airDensity,Wx=0,Wz=abs(windMagnitude),targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
-        perpendicularDifference = np.arctan2(perpendicularTrajectory.T[-1][8],trajectory.T[-1][6])*3200/np.pi
+        perpendicularDifference = np.arctan2(perpendicularTrajectory.T[-1][8],trajectory[6][-1])*3200/np.pi
         parallelTrajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=elevation,Rho=airDensity,Wx=abs(windMagnitude),Wz=0,targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
         parallelElev = elevation
-        parallelDifference = parallelTrajectory.T[-1][6]-trajectory.T[-1][6]
+        parallelDifference = parallelTrajectory[6][-1]-trajectory[6][-1]
         testParallelTrajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=parallelElev+0.5,Rho=airDensity,Wx=windMagnitude,Wz=0,targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
         parallelDifference = 0.5/(parallelTrajectory.T[-1][6]-testParallelTrajectory.T[-1][6])*parallelDifference
         solutionDict["PerpendicularCorrection"] = abs(perpendicularDifference)
@@ -749,13 +780,13 @@ def Line(baseDir,orientation: float,deviation: float,artyX: str,artyY: str,syste
             progressbar["value"] = progressbar["value"] + 1
             progressbar.update()
         except: None
-        solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
+        solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip,forceCharge=True)
         try:
             progressbar["value"] = progressbar["value"] + 1
             progressbar.update()
         except: None
         nearPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)-deviation,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="triangle")
-        nearSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=nearPosition[0],tgtY=nearPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
+        nearSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=nearPosition[0],tgtY=nearPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip,forceCharge=True)
         solution["Far"] = farSolution["Elevation"]
         solution["Near"] = nearSolution["Elevation"]
         solution["TOF"] = nearSolution["TOF"]
@@ -781,13 +812,13 @@ def Box(baseDir,deviationLength: float,deviationWidth: float,artyX: str,artyY: s
         progressbar["value"] = progressbar["value"] + 1
         progressbar.update()
     except: None
-    solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
+    solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip,forceCharge=True)
     try:
         progressbar["value"] = progressbar["value"] + 1
         progressbar.update()
     except: None
     nearPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)-deviationLength,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="triangle")
-    nearSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=nearPosition[0],tgtY=nearPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip)
+    nearSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=nearPosition[0],tgtY=nearPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip,forceCharge=True)
     solution["Far"] = farSolution["Elevation"]
     solution["Near"] = nearSolution["Elevation"]
     solution["Left"] = solution["Azimuth"]-deviationWidth/Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)
@@ -846,10 +877,8 @@ def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:
                         }
                 else:
                     averageBearing = (Bearing(artyX,artyY,tgtX[i],tgtY[i],xFlip,yFlip)+Bearing(artyX,artyY,tgtX[i+1],tgtY[i+1],xFlip,yFlip))/2
-                    print(averageBearing,Bearing(artyX,artyY,tgtX[i],tgtY[i],xFlip,yFlip),Bearing(artyX,artyY,tgtX[i+1],tgtY[i+1],xFlip,yFlip))
                     grid1 = GridPosition(artyX,artyY,Pythag(artyX,artyY,tgtX[i],tgtY[i]),0,averageBearing,xFlip,yFlip)
                     grid2 = GridPosition(artyX,artyY,Pythag(artyX,artyY,tgtX[i+1],tgtY[i+1]),0,averageBearing,xFlip,yFlip)
-                    print(grid1,grid2)
                     averageHeight = (tgtHeight[i]+tgtHeight[i+1])/2
                     grid1Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid1[0],grid1[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,charge,xFlip,yFlip)
                     try:
