@@ -648,13 +648,15 @@ class Friendlies(UIComponentBase):
             if len(self.friendlyPosX.get()) in (4,5) and len(self.friendlyPosY.get()) in (4,5) and all(not var for var in (self.friendlyName.get().isspace(),
                                                                                                                            self.friendlyHeight.get().isspace(),
                                                                                                                            self.friendlyHeight.get().isalpha())):
-                dispersion = float(self.friendlyDispersion.get()) if self.friendlyDispersion.get() != "" else 0.0
+                dispersion = abs(float(self.friendlyDispersion.get())) if self.friendlyDispersion.get() != "" else 0.0
                 newPos = {
                     self.friendlyName.get() : {
                         "GridX" : self.friendlyPosX.get(),
                         "GridY" : self.friendlyPosY.get(),
                         "Height" : self.friendlyHeight.get(),
-                        "Dispersion" : dispersion
+                        "Dispersion" : dispersion,
+                        "GridXBounds": (round(float(self.friendlyPosX.get())-dispersion),round(float(self.friendlyPosX.get())+dispersion)),
+                        "GridYBounds": (round(float(self.friendlyPosY.get())-dispersion),round(float(self.friendlyPosY.get())+dispersion)),
                     }
                 }
                 try: self.UIMaster.oldLoaded[JsonSource.FRIENDLY][self.friendlyName.get()]
@@ -2153,6 +2155,20 @@ class Targets(UIComponentBase):
         frame.update_idletasks()
         canvas.config(scrollregion=canvas.bbox("all"))
 
+    def TrajectoryDetection(self,trajectories):
+        """trajectories needs to be either a list/tuple of either one trajectroy or several to work correctly"""
+        intersect = []
+        for friendlyName,friendly in self.UIMaster.oldLoaded[JsonSource.FRIENDLY].items():
+            for trajectory in trajectories:
+                positions = np.array((trajectory[0],trajectory[1]),dtype=int)
+                self.UIMaster.activeMaps["Main"].ax.plot(positions[0],positions[1],"g-")
+                inX = ((positions[:,0] >= friendly["GridXBounds"][0]) & (positions[:,0] <= friendly["GridXBounds"][1]))
+                inY = ((positions[:,1] >= friendly["GridYBounds"][0]) & (positions[:,1] <= friendly["GridYBounds"][1]))
+                if (inX & inY).any():
+                    intersect.append(friendlyName)
+                    break
+        return intersect
+
     def CalculateSnapshot(self,IDFPDict,IDFP,width, depth,tgtX,tgtY,tgtHeight,temperature,humidity,pressure,windDirection,windMagnitude,windDynamic):
         try:
             self.targetListCalculate.config(state="disabled")
@@ -2332,6 +2348,12 @@ class Targets(UIComponentBase):
                             "Second": details["Time"]["Second"]
                         }
                     del solution["LowPositions"]
+                    # intersects = self.TrajectoryDetection((solution["trajectoryPath"]))
+                    # print(intersects)
+                    # if intersects != []:
+                    #     print(intersects)
+                    #     solution["intersects"] = intersects
+                    del solution["trajectoryPath"]
                     return solution
                 elif details["Mutator"] == "Line":
                     deviation = details["Depth"] if details["Orientation"] == "Vertical" else details["Width"]
@@ -2363,6 +2385,7 @@ class Targets(UIComponentBase):
                             "Second": details["Time"]["Second"]
                         }
                     del solution["LowPositions"]
+                    del solution["trajectoryPath"]
                     return solution
                 
                 elif details["Mutator"] == "Box":
@@ -2394,6 +2417,7 @@ class Targets(UIComponentBase):
                             "Second": details["Time"]["Second"]
                         }
                     del solution["LowPositions"]
+                    del solution["trajectoryPath"]
                     return solution
                 else:
                     None
@@ -2491,6 +2515,7 @@ class FireMissions(UIComponentBase):
         self.fireMissionNotebookFrameDict[tabName] = [fireMissionWindowFrame,fireMissionToplevel]
         self.FireMisisonTextFrameConfiguration(fireMissionWindowFrame)
         self.fireMissionWindowOpen = True
+        self.FireMissionDisplayUpdate(self.fireMissions)
         fireMissionToplevel.protocol("WM_DELETE_WINDOW",Close)
 
     def SortFireMissions(self,fireMissions:dict):

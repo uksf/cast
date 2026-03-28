@@ -76,7 +76,7 @@ class Cast():
     
     def TerrainFolderCheck(self):
         self.UI.mainMenu.AddTerrains(self.terrainFolders[0])
-        #self.UI.mainMenu.terrainMenu.add_radiobutton(label=terrainFolder,variable=self.UI.terrain,value=terrainFolder,command=)    
+        # self.UI.mainMenu.terrainMenu.add_radiobutton(label=terrainFolder,variable=self.UI.terrain,value=terrainFolder,command=)    
 
     def LoginRefresh(self) -> bool:
         refresh = self.account.RefreshAuthToken(self.appData_local)
