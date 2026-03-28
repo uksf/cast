@@ -114,6 +114,20 @@ class SystemInfo:
         else:
             return self.systemInfo[self.system][self.info]
 
+class ArtilleryFunctionError(Exception):
+    pass
+
+class MaxRangeError(ArtilleryFunctionError):
+    def __init__(self, system ,range,elevation,height,position = None):
+        self.system = system
+        self.range = range
+        self.elevation = elevation
+        self.position = position
+        self.height = height
+    def __str__(self):
+        return f"Max range {self.range}m, at height of {self.height}m, at position {self.position}, with elevation angle of {self.elevation}"
+        
+
 def AirDensityRatio(height,Rho):
     return Rho*np.exp(-height/8400)
 
@@ -163,11 +177,11 @@ def DirectTrajectory(velocity,elevation,Rho,Wx,Wz,targetDistance,artyHeight,mass
     t=0 #initial time
     dataSet = [] #empty list
     data = []
-    while t < 180:
-        while (Vx>0 or x<targetDistance): #while round has not reaches target
-            data = delta(deltaT,Vx,Vy,Vz,x,y,z,t,Rho,Wx,Wz,mass,dragCoef,crossArea) #calling a new step to be made
-            dataSet.append(data) #appending the new line of data to the list
-            Vx,Vy,Vz,x,y,z,t = data[3],data[4],data[5],data[6],data[7],data[8],data[9] #reasigning old variables to the new set
+    while (Vx>0 and x<targetDistance and t< 120): #while round has not reached target
+        # print(t,y)
+        data = delta(deltaT,Vx,Vy,Vz,x,y,z,t,Rho,Wx,Wz,mass,dragCoef,crossArea) #calling a new step to be made
+        dataSet.append(data) #appending the new line of data to the list
+        Vx,Vy,Vz,x,y,z,t = data[3],data[4],data[5],data[6],data[7],data[8],data[9] #reasigning old variables to the new set
     dataSet = np.array(dataSet).T #transposed to make each row a new instance
     return(dataSet) #Returns all accelerations, velocites, positions and times the round has achieved
 def AirDensity(humidity: float,temp:float,pressure:float):
@@ -670,19 +684,34 @@ def ConvergeantSolution(charge,baseDir,system,fireAngle,distance,targetHeight,ar
             # print(trajectory.T[-1],"\n",Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=predictElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get()).T[-1])
             return predictElev, trajectory, charge
 
-def DirectSolution(initElev,targetDistance,system,airDensity,windDict,distance,artyHeight,targetHeight):
-    initElev = 100
+def DirectSolution(charge,system,airDensity,windDict,distance,artyHeight,targetHeight,initElev=100):
+    print(distance)
     iterations = 0
-    trajectory = DirectTrajectory(velocity=SystemInfo(system=system).get()["charge"].keys()[-1],elevation=initElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetDistance=distance,artyHeight=artyHeight,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+    print("check")
+    trajectory = DirectTrajectory(velocity=SystemInfo(system=system,info="charge").get(charge=charge),elevation=initElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetDistance=distance,artyHeight=artyHeight,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+    print("check")
     deltaHeight = targetHeight-trajectory[7][-1]
+    print(deltaHeight)
+    oldTraj, oldElev = trajectory,initElev
     if deltaHeight > 0:
-        initElev += 50
+        elev = initElev + 50
     else:
-        initElev -=50
-    trajectory = DirectTrajectory(velocity=SystemInfo(system=system).get()["charge"].keys()[-1],elevation=initElev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetDistance=distance,artyHeight=artyHeight,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+        elev = initElev - 50
+    while abs(deltaHeight) >= accuracy and iterations < 20:
+        trajectory = DirectTrajectory(velocity=SystemInfo(system=system,info="charge").get(charge=charge),elevation=elev,Rho=airDensity,Wx=windDict["Tailwind"],Wz=windDict["Crosswind"],targetDistance=distance,artyHeight=artyHeight,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
+        deltaHeight = targetHeight-trajectory[7][-1]
+        newElev = elev + deltaHeight * (elev - oldElev) / (trajectory[7][-1] - oldTraj[7][-1])
+        print(newElev,deltaHeight)
+        iterations += 1
+        oldTraj, oldElev= trajectory,elev
+        elev = newElev
+    if abs(deltaHeight) >= accuracy and iterations >= 20 and charge < int(list(SystemInfo(system=system).get()["charge"].keys())[-1]):
+        oldElev, trajectory,charge = DirectSolution(charge+1,system,airDensity,windDict,distance,artyHeight,targetHeight,initElev=100)
+    elif iterations >= 20 and charge == int(list(SystemInfo(system=system).get()["charge"].keys())[-1]):
+        raise MaxRangeError(system,trajectory[6][-1],oldElev,trajectory[7][-1])
+    return oldElev, trajectory,charge
 
-
-def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tgtY:str,artyHeight=float(0),targetHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,forceCharge = False):
+def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tgtY:str,artyHeight=float(0),targetHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,forceCharge = False,tempTrajectory=False):
     """
     Define artillery and target positions, fire angle and system
 
@@ -714,23 +743,29 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
     if charge < 0 and fireAngle!="Direct":
         charge = Charge(system,fireAngle,distance)
     elif charge < 0 and fireAngle =="Direct":
-        charge = SystemInfo(system=system).get()["charge"].keys()[-1]
+        charge = int(list(SystemInfo(system=system).get()["charge"].keys())[-1])
     if windDynamic == 0:
         windDict=Wind(bearing,windDirection,windMagnitude)
     else:
         windDict={"Tailwind" : 0,"Crosswind": 0}
-    print(charge)
     if fireAngle != "Direct":
         elevation, trajectory, charge = ConvergeantSolution(charge,baseDir,system,fireAngle,distance,targetHeight,artyHeight,airDensity,windDict,forceCharge)
     else:
-        elevation,trajectory, charge = DirectSolution(distance,charge)
+        elevation,trajectory, charge = DirectSolution(charge,system,airDensity,windDict,distance,artyHeight,targetHeight)
     collisionAvoidance = []
     projectileTime = 0
     for projectile in trajectory.T:
-        if projectile[7] < maxHeight and projectileTime+0.02 < projectile[9] and projectile[9] < trajectory[9][-1]-0.01:
-            collisionAvoidance.append((projectile[6],projectile[8],projectile[7]))
+        if projectile[7] < maxHeight and projectileTime+0.02 < projectile[9] and projectile[9] < trajectory[9][-1]-0.1:
+            projectileGridPos = GridPosition(artyX,artyY,projectile[6],projectile[8],bearing,xFlip,yFlip,oppositeType="triangle")
+            collisionAvoidance.append((projectileGridPos[0],projectileGridPos[1],round(projectile[7],1)))
             projectileTime = projectile[9]
-    
+    trajectoryPath = []
+    projectileTime = 0
+    for projectile in trajectory.T:
+        if projectileTime+0.2 < projectile[9]:
+            projectileGridPos = GridPosition(artyX,artyY,projectile[6],projectile[8],bearing,xFlip,yFlip,oppositeType="triangle")
+            trajectoryPath.append((projectileGridPos[0],projectileGridPos[1],round(projectile[7],1)))
+            projectileTime = projectile[9]
 
     def Azimuth():
         angle = np.arctan(trajectory[8][-1]/trajectory[6][-1])
@@ -759,8 +794,11 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
         "Temperature" : temperature,
         "Pressure" : pressure,
         "Humidity": humidity,
-        "LowPositions" : collisionAvoidance
+        "LowPositions" : collisionAvoidance,
+        "trajectoryPath" : [trajectoryPath]
     }
+    if tempTrajectory:
+        solutionDict["tempTrajectory"] = trajectory
     if windDynamic == 1:
         perpendicularTrajectory = Trajectory(velocity=SystemInfo(system=system,info="charge").get(charge),elevation=elevation,Rho=airDensity,Wx=0,Wz=abs(windMagnitude),targetH=targetHeight,artyHeight=artyHeight,fireAngle=fireAngle,mass=SystemInfo(system=system,info="mass").get(),dragCoef=SystemInfo(system=system,info="dragCoef").get(),crossArea=SystemInfo(system=system,info="crossArea").get())
         perpendicularDifference = np.arctan2(perpendicularTrajectory.T[-1][8],trajectory[6][-1])*3200/np.pi
@@ -790,11 +828,16 @@ def Line(baseDir,orientation: float,deviation: float,artyX: str,artyY: str,syste
         solution["Far"] = farSolution["Elevation"]
         solution["Near"] = nearSolution["Elevation"]
         solution["TOF"] = nearSolution["TOF"]
-        solution["Vertex"] = [solution["Vertex"][0],solution["Vertex"][1],nearSolution["Vertex"][2]]
+        if fireAngle == "High":
+            solution["Vertex"] = [solution["Vertex"][0],solution["Vertex"][1],nearSolution["Vertex"][2]]
+        else:
+            solution["Vertex"] = [solution["Vertex"][0],solution["Vertex"][1],farSolution["Vertex"][2]]
         solution["DeviationLength"] = deviation
+        solution["trajectoryPath"].append(farSolution["trajectoryPath"][0])
+        solution["trajectoryPath"].append(nearSolution["trajectoryPath"][0])
         return solution
     elif orientation == "Horizontal":
-        solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip)
+        solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip,tempTrajectory=True)
         solution["Left"] = solution["Azimuth"]-deviation/Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)
         solution["Right"] = solution["Azimuth"]+deviation/Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)
         if solution["Left"] < 0 :
@@ -802,12 +845,29 @@ def Line(baseDir,orientation: float,deviation: float,artyX: str,artyY: str,syste
         if solution["Right"] > 2*np.pi:
             solution["Right"] -= 2*np.pi
         solution["DeviationWidth"] = deviation
+        trajectoryPath = []
+        projectileTime=0
+        for projectile in solution["tempTrajectory"].T:
+            if projectileTime+0.2 < projectile[9]:
+                projectileGridPos = GridPosition(artyX,artyY,projectile[6],projectile[8],solution["Left"],xFlip,yFlip,oppositeType="triangle")
+                trajectoryPath.append((projectileGridPos[0],projectileGridPos[1],round(projectile[7],1)))
+                projectileTime = projectile[9]
+        solution["trajectoryPath"].append(trajectoryPath)
+        trajectoryPath = []
+        projectileTime=0
+        for projectile in solution["tempTrajectory"].T:
+            if projectileTime+0.2 < projectile[9]:
+                projectileGridPos = GridPosition(artyX,artyY,projectile[6],projectile[8],solution["Right"],xFlip,yFlip,oppositeType="triangle")
+                trajectoryPath.append((projectileGridPos[0],projectileGridPos[1],round(projectile[7],1)))
+                projectileTime = projectile[9]
+        solution["trajectoryPath"].append(trajectoryPath)
+        del solution["tempTrajectory"]
         return solution
     else:
         return AttributeError
 def Box(baseDir,deviationLength: float,deviationWidth: float,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tgtY:str,artyHeight=float(0),targetHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,progressbar = None):
     farPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)+deviationLength,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="triangle")
-    farSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=farPosition[0],tgtY=farPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip)
+    farSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=farPosition[0],tgtY=farPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip,tempTrajectory=True)
     try:
         progressbar["value"] = progressbar["value"] + 1
         progressbar.update()
@@ -830,7 +890,27 @@ def Box(baseDir,deviationLength: float,deviationWidth: float,artyX: str,artyY: s
     solution["DeviationLength"] = deviationLength
     solution["DeviationWidth"] = deviationWidth
     solution["TOF"] = nearSolution["TOF"]
-    solution["Vertex"] = [solution["Vertex"][0],solution["Vertex"][1],nearSolution["Vertex"][2]]
+    if fireAngle == "High":
+        solution["Vertex"] = [solution["Vertex"][0],solution["Vertex"][1],nearSolution["Vertex"][2]]
+    else:
+        solution["Vertex"] = [solution["Vertex"][0],solution["Vertex"][1],farSolution["Vertex"][2]]
+    solution["trajectoryPath"].append(farSolution["trajectoryPath"])
+    trajectoryPath = []
+    projectileTime=0
+    for projectile in farSolution["tempTrajectory"].T:
+        if projectileTime+0.2 < projectile[9]:
+            projectileGridPos = GridPosition(artyX,artyY,projectile[6],projectile[8],solution["Left"],xFlip,yFlip,oppositeType="triangle")
+            trajectoryPath.append((projectileGridPos[0],projectileGridPos[1],round(projectile[7],1)))
+            projectileTime = projectile[9]
+    solution["trajectoryPath"].append(trajectoryPath)
+    trajectoryPath = []
+    projectileTime=0
+    for projectile in farSolution["tempTrajectory"].T:
+        if projectileTime+0.2 < projectile[9]:
+            projectileGridPos = GridPosition(artyX,artyY,projectile[6],projectile[8],solution["Right"],xFlip,yFlip,oppositeType="triangle")
+            trajectoryPath.append((projectileGridPos[0],projectileGridPos[1],round(projectile[7],1)))
+            projectileTime = projectile[9]
+    solution["trajectoryPath"].append(trajectoryPath)
     return solution
 
 def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:list,tgtY:list,tgtHeight,tgtName,explicit = False,series = False, seriesOrientation = None,spread = 20,artyHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,progressbar = None):
