@@ -1,5 +1,5 @@
 testCommandLine = ["--json","local"]
-version = "v0.1.0hotfix"
+version = "v0.1.1"
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
