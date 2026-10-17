@@ -28,7 +28,7 @@ from matplotlib.path import Path as MPLPath
 from matplotlib.artist import Artist
 import pandas as pd
 from Functions.JsonFunctions import JsonSource
-from Functions.UI_Components import IDFPCreation,TargetCreation,TargetDetails,Targets,FireMissions
+from Functions.UIComponents import IDFPCreation,TargetCreation,TargetDetails,Targets,FireMissions
 import queue
 import threading
 # from CAST import CastUI
@@ -283,16 +283,20 @@ class MapTileManager():
             return 7
         else: return 8
         
-    def GetTilesInView(self,xlim: tuple,ylim: tuple,zoom:int,maxSize:tuple):
+    def GetTilesInView(self,xlim: tuple,ylim: tuple,zoom:int,maxSize:tuple,mainOffset: tuple | list,zoomLevelOffsets: tuple | list):
         """zoomTileCount tuple (x,y) count"""
         zoomTileCount = pow(2,zoom)
-        tileScale = (maxSize[0]/zoomTileCount*self.customScale,maxSize[1]/zoomTileCount*self.customScale)
+        #mainOffset[0]-zoomLevelOffsets[zoom][0]
+        
+        xlim = [xlim[0]-(mainOffset[0]+zoomLevelOffsets[zoom][0]),xlim[1]-(mainOffset[0]+zoomLevelOffsets[zoom][0])]
+        ylim = [ylim[0]-(mainOffset[1]+zoomLevelOffsets[zoom][1]),ylim[1]-(mainOffset[1]+zoomLevelOffsets[zoom][1])]
+        tileScale = (maxSize[0])/zoomTileCount*self.customScale,(maxSize[1])/zoomTileCount*self.customScale
         tiles = []
         ylim = (maxSize[1]-ylim[1],maxSize[1]-ylim[0])
-        xMinTile = max(0,int(xlim[0]/tileScale[0]))
-        xMaxTile = min(zoomTileCount-1,int(xlim[1]/tileScale[0]))
-        yMinTile = max(0,int(ylim[0]/tileScale[1]))
-        yMaxTile = min(zoomTileCount-1,int(ylim[1]/tileScale[1]))
+        xMinTile = max(0,int((xlim[0])/tileScale[0]))
+        xMaxTile = min(zoomTileCount-1,int((xlim[1])/tileScale[0]))
+        yMinTile = max(0,int((ylim[0]-ylim[1]-ylim[0])/tileScale[1]))
+        yMaxTile = min(zoomTileCount-1,int((ylim[1]+ylim[1]-ylim[0])/tileScale[1]))
         for x in range(xMinTile,xMaxTile+1):
             for y in range(yMinTile,yMaxTile+1):
                 tiles.append((x,y))
@@ -965,6 +969,7 @@ class MatPlotLibWidget():
         self.mapCanvas = FigureCanvasTkAgg(self.fig, master=self.frame)
         self.mapCanvas.draw()
         self.toolbar = CustomToolbar(self,self.mapCanvas, self.frame,pack_toolbar=False,MessageLog = self.MessageLog,toolbarIconPath=self.toolbarIconPath,UIMaster=self.UIMaster,ax=self.ax,NextTargetInSeq=self.UIMaster.targetCreation.NextTargetInSeq)
+        self.mainOffset = (0,0)
         self.toolbar.home = self.ResetToDefaultView
         self.toolbar.grid(row=0, column=0, sticky='ns')
         self.toolbar.update()
@@ -1000,21 +1005,28 @@ class MatPlotLibWidget():
         if self.settings == {}:
             try:
                 self.settingsFile.Save(entry={"X Limit" : self.UIMaster.maxCol-1,
-                                              "Y Limit" : self.UIMaster.maxRow-1})
+                                              "Y Limit" : self.UIMaster.maxRow-1,
+                                              "mapScaleCoef" : 1,
+                                              "offset" : (0,0),
+                                              "zoomLevelOffsets" : ((0,0),(0,0),(0,0),(0,0),(0,0),(0,0),(0,0),(0,0),(0,0))})
             except: None
         if self.settings != {}:
             try:
                 self.absXLimit = self.settings["X Limit"]
                 self.absYLimit = self.settings["Y Limit"]
-                self.ax.set_xlim(0,self.settings["X Limit"])
-                self.ax.set_ylim(0,self.settings["Y Limit"])
+                try: self.mainOffset = self.settings["offset"]
+                except: self.mainOffset = [0,0]
+                try: self.zoomLevelOffsets = self.settings["zoomLevelOffsets"]
+                except: self.zoomLevelOffsets = [[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]]
+                self.ax.set_xlim(self.mainOffset[0],self.mainOffset[0]+self.settings["X Limit"])
+                self.ax.set_ylim(self.mainOffset[1],self.mainOffset[1]+self.settings["Y Limit"])
                 self.loadedTerrainHeightMap = True
                 try:
                     self.tileManager = MapTileManager(Path.joinpath(tileLocation,tileLocation.name+".terrainimage"),self.StatusMessageErrorDump,self)
                     self.loadedTerrainImage = True
                     try:
                         self.tileManager.customScale = self.settings["mapScaleCoef"]
-                    except: None
+                    except: self.tileManager.customScale = 1
                 except Exception as e:
                     self.StatusMessageErrorDump(e,errorMessage="Failed to load Map tile manager")
                     self.loadedTerrainImage = False
@@ -1038,8 +1050,13 @@ class MatPlotLibWidget():
 
 
     def ResetToDefaultView(self):
-        self.ax.set_xlim(0, self.absXLimit)
-        self.ax.set_ylim(0, self.absYLimit)
+        if self.loadedTerrainHeightMap:
+            self.ax.set_xlim(self.mainOffset[0], self.mainOffset[0]+self.absXLimit)
+            self.ax.set_ylim(self.mainOffset[1], self.mainOffset[1]+self.absYLimit)
+        else:
+            self.ax.set_xlim(0, self.absXLimit)
+            self.ax.set_ylim(0, self.absYLimit)
+
         self.UpdateMap()
         self.UpdateGrid()
         self.ax.get_figure(False).canvas.draw_idle()
@@ -1085,17 +1102,16 @@ class MatPlotLibWidget():
             self.isUpdating = True
             xLim = self.ax.get_xlim()
             yLim = self.ax.get_ylim()
-            zoom = self.tileManager.GetZoomLevelFromScale(xLim,yLim,(self.absXLimit,self.absYLimit))
-            tiles, tileSize = self.tileManager.GetTilesInView(xLim,yLim,zoom,(self.absXLimit,self.absYLimit))
+            zoom = self.tileManager.GetZoomLevelFromScale(xLim,yLim,(self.absXLimit-self.mainOffset[0],self.absYLimit-self.mainOffset[1]))
+            tiles, tileSize = self.tileManager.GetTilesInView(xLim,yLim,zoom,(self.absXLimit,self.absYLimit),self.mainOffset,self.zoomLevelOffsets)
             for image in self.tileImages:
                 image.remove()
             self.tileImages.clear()
             for xTile,yTile in tiles:
                 tileData = self.tileManager.GetTile(zoom,xTile,yTile)
                 if tileData is not None:
-                    xPos = xTile * tileSize[0]
-                    yPos = yTile * tileSize[1]
-                    yPos = (yTile * tileSize[1]) - (self.settings["Y Limit"]*self.settings["mapScaleCoef"]-self.settings["Y Limit"])
+                    xPos = xTile * tileSize[0] + self.mainOffset[0] + self.zoomLevelOffsets[zoom][0]
+                    yPos = (yTile * tileSize[1]) - (self.settings["Y Limit"]*self.settings["mapScaleCoef"]-self.settings["Y Limit"]+ self.mainOffset[1]+self.zoomLevelOffsets[zoom][1]) 
                     img = self.ax.imshow(tileData,extent=[xPos,xPos+tileSize[0],self.absYLimit-(yPos+tileSize[1]),self.absYLimit-yPos],aspect="equal",zorder=0,interpolation="bilinear")
                     self.tileImages.append(img)
             self.currentZoom = zoom

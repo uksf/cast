@@ -1,5 +1,5 @@
 testCommandLine = ["--json","local"]
-version = "v0.1.1"
+version = "v0.1.2"
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -18,7 +18,7 @@ import queue
 # from pydub.playback import play
 from Functions import ArtilleryFunctions as AF, MapFunctions as Map
 from Functions.JsonFunctions import JsonType, JsonSource, CastJson, UksfAccounts
-from Functions.UI_Components import MainMenus,Statusbar,IDFPCreation,Atmospheric,Friendlies,TargetCreation,TargetDetails,Clock,Notes,Targets,FireMissions
+from Functions.UIComponents import MainMenus,Statusbar,IDFPCreation,Atmospheric,Friendlies,TargetCreation,TargetDetails,Clock,Notes,Targets,FireMissions
 
 class Cast():
     def __init__(self,version):
@@ -1006,7 +1006,7 @@ class CastUI():
                         elif int(x) < 0: x = 0
                         if int(y) > self.maxRow: y = self.maxRow - 1
                         elif int(y) < 0: y = 0
-                        try: heightlabel.set(self.terrainHeightMap.iat[int(x),int(y)])
+                        try: heightlabel.set(self.terrainHeightMap.iat[int(x)-self.mainMap.settings["offset"][0],int(y)-self.mainMap.settings["offset"][1]])
                         except: pass
             else:
                 if len(x) in (4,5) and len(y) in (4,5):
@@ -1016,7 +1016,7 @@ class CastUI():
                     elif int(x) < 0: x = 0
                     if int(y) > self.maxRow: y = self.maxRow - 1
                     elif int(y) < 0: y = 0
-                    try: heightlabel.set(self.terrainHeightMap.iat[int(x),int(y)])
+                    try: heightlabel.set(self.terrainHeightMap.iat[int(x)-self.mainMap.settings["offset"][0],int(y)-self.mainMap.settings["offset"][1]])
                     except: pass
 
     def LoadSelectionDetails(self,event,source):
