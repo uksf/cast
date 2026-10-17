@@ -810,18 +810,20 @@ def Solution(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tg
         solutionDict["PerpendicularCorrection"] = abs(perpendicularDifference)
         solutionDict["ParallelCorrection"] = abs(parallelDifference)
     return(solutionDict)
-def Line(baseDir,orientation: float,deviation: float,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tgtY:str,artyHeight=float(0),targetHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False, progressbar = None):
+def Line(baseDir,orientation: str,deviation: float,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:str,tgtY:str,artyHeight=float(0),targetHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False, progressbar = None):
     if orientation == "Vertical":
         farPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)+deviation,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="triangle")
         farSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=farPosition[0],tgtY=farPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=charge,xFlip=xFlip,yFlip=yFlip)
         try:
-            progressbar["value"] = progressbar["value"] + 1
-            progressbar.update()
+            if progressbar:
+                progressbar["value"] = progressbar["value"] + 1
+                progressbar.update()
         except: None
         solution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=tgtX,tgtY=tgtY,artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip,forceCharge=True)
         try:
-            progressbar["value"] = progressbar["value"] + 1
-            progressbar.update()
+            if progressbar:
+                progressbar["value"] = progressbar["value"] + 1
+                progressbar.update()
         except: None
         nearPosition = GridPosition(artyX=artyX,artyY=artyY,adjacent=Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)-deviation,opposite=0,bearing=Bearing(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY,xFlip=xFlip,yFlip=yFlip),xFlip=xFlip,yFlip=yFlip,oppositeType="triangle")
         nearSolution = Solution(baseDir=baseDir,artyX=artyX,artyY=artyY,system=system,fireAngle=fireAngle,tgtX=nearPosition[0],tgtY=nearPosition[1],artyHeight=artyHeight,targetHeight=targetHeight,maxHeight=maxHeight,windDirection=windDirection,windMagnitude=windMagnitude,windDynamic=windDynamic,humidity=humidity,temperature=temperature,pressure=pressure,charge=farSolution["Charge"],xFlip=xFlip,yFlip=yFlip,forceCharge=True)
@@ -913,7 +915,7 @@ def Box(baseDir,deviationLength: float,deviationWidth: float,artyX: str,artyY: s
     solution["trajectoryPath"].append(trajectoryPath)
     return solution
 
-def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:list,tgtY:list,tgtHeight,tgtName,explicit = False,series = False, seriesOrientation = None,spread = 20,artyHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,progressbar = None):
+def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:list,tgtY:list,tgtHeight:list,tgtName:list,explicit = False,series = False,spacing : int = 0,artyHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,progressbar = None):
     lineSolution = {}
     if explicit == False:
         if charge == -1:
@@ -933,17 +935,23 @@ def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:
                     grid2 = GridPosition(artyX,artyY,averagePointDistance,0,bearing=Bearing(artyX,artyY,tgtX[i+1],tgtY[i+1],xFlip,yFlip))
                     averageHeight = (tgtHeight[i]+tgtHeight[i+1])/2
                     grid1Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid1[0],grid1[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,charge,xFlip,yFlip)
+                    if spacing != 0:
+                        deviation = spacing/Pythag(artyX=artyX,artyY=artyY,tgtX=tgtX,tgtY=tgtY)
+                    # else:
+                    #     grid1Solution = Line(baseDir,"Horizontal",spacing,artyX,artyY,system,fireAngle,grid1[0],grid1[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,charge,xFlip,yFlip)
                     try:
                         progressbar["value"] = progressbar["value"] + 1
                         progressbar.update()
                     except: None
                     grid2Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid2[0],grid2[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,grid1Solution["Charge"],xFlip,yFlip)
-                    lineSolution[tgtName[i]+","+tgtName[i+1]] = {
+                        
+                    lineSolution[tgtName[i]+" | "+tgtName[i+1]] = {
                         "Orientation" : "Horizontal",
                         "Distance" : averagePointDistance,
                         "Elevation" : np.round(((grid1Solution["Elevation"]+grid2Solution["Elevation"])/2)*10)/10,
                         "Azimuth1" : grid1Solution["Azimuth"],
                         "Azimuth2" : grid2Solution["Azimuth"],
+                        "Positions" : [grid1, grid2],
                         "Vertex" : grid1Solution["Vertex"] if grid1Solution["Vertex"] > grid2Solution["Vertex"] else grid2Solution["Vertex"],
                         "Charge" : grid1Solution["Charge"],
                         "TOF" : grid1Solution["TOF"] if grid1Solution["TOF"] < grid2Solution["TOF"] else grid2Solution["TOF"],
@@ -955,23 +963,32 @@ def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:
                         "Pressure" : pressure,
                         "Humidity" : humidity
                         }
+                    if spacing != 0:
+                        lineSolution[tgtName[i]+" | "+tgtName[i+1]]["deviation"] = deviation
                 else:
                     averageBearing = (Bearing(artyX,artyY,tgtX[i],tgtY[i],xFlip,yFlip)+Bearing(artyX,artyY,tgtX[i+1],tgtY[i+1],xFlip,yFlip))/2
                     grid1 = GridPosition(artyX,artyY,Pythag(artyX,artyY,tgtX[i],tgtY[i]),0,averageBearing,xFlip,yFlip)
                     grid2 = GridPosition(artyX,artyY,Pythag(artyX,artyY,tgtX[i+1],tgtY[i+1]),0,averageBearing,xFlip,yFlip)
                     averageHeight = (tgtHeight[i]+tgtHeight[i+1])/2
-                    grid1Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid1[0],grid1[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,charge,xFlip,yFlip)
+                    if spacing != 0:
+                        grid1Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid1[0],grid1[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,charge,xFlip,yFlip)
+                    else:
+                        grid1Solution = Line(baseDir,"Vertical",spacing,artyX,artyY,system,fireAngle,grid1[0],grid1[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,charge,xFlip,yFlip)
                     try:
                         progressbar["value"] = progressbar["value"] + 1
                         progressbar.update()
                     except: None
-                    grid2Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid2[0],grid2[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,grid1Solution["Charge"],xFlip,yFlip)
-                    lineSolution[tgtName[i]+","+tgtName[i+1]] = {
+                    if spacing != 0:
+                        grid2Solution = Solution(baseDir,artyX,artyY,system,fireAngle,grid2[0],grid2[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,grid1Solution["Charge"],xFlip,yFlip)
+                    else:
+                        grid2Solution = Line(baseDir,"Vertical",spacing,artyX,artyY,system,fireAngle,grid1[0],grid1[1],artyHeight,averageHeight,maxHeight,windDirection,windMagnitude,windDynamic,humidity,temperature,pressure,charge,xFlip,yFlip)
+                    lineSolution[tgtName[i]+" | "+tgtName[i+1]] = {
                         "Orientation" : "Vertical",
                         "Distance" : averagePointDistance,
                         "Elevation1" : grid1Solution["Elevation"],
                         "Elevation2" : grid2Solution["Elevation"],
                         "Azimuth" : (grid1Solution["Azimuth"]+grid2Solution["Azimuth"])/2,
+                        "Positions" : [grid1, grid2],
                         "Vertex" : grid1Solution["Vertex"] if grid1Solution["Vertex"] > grid2Solution["Vertex"] else grid2Solution["Vertex"],
                         "Charge" : grid1Solution["Charge"],
                         "TOF" : grid1Solution["TOF"] if grid1Solution["TOF"] < grid2Solution["TOF"] else grid2Solution["TOF"],
@@ -984,5 +1001,10 @@ def LineMultiPoint(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:
                         "Humidity" : humidity
                         }
         return lineSolution
+    else:
+        None
+def CreepingBarrage(baseDir,artyX: str,artyY: str,system: str,fireAngle:str,tgtX:list,tgtY:list,tgtHeight,tgtName, spacing: int, width: int ,artyHeight=float(0),maxHeight = float(100),windDirection=float(0),windMagnitude=float(0),windDynamic=0,humidity = float(100),temperature = float(15),pressure = float(1013.25),charge=-1,xFlip = False,yFlip= False,progressbar = None):
+    None
     #print(Solution(artyX="06390",artyY="12444",tgtX="20571",tgtY="10704",system="Sholef",charge=3,fireAngle="High",windDirection=180,windMagnitude=2,targetHeight=20.2,artyHeight=207.8,temperature=27.9,humidity=33.2,pressure=986.9)["Elevation"])
-#print(LineMultiPoint(artyX="11390",artyY="12444",tgtX=["16590","16590","16290"],tgtY=["12444","12644","12644"],explicit=False,system="Sholef",charge=-1,fireAngle="High",windDirection=180,windMagnitude=2,tgtHeight=[73,23,20.2],tgtName=["XY-00","XY-01","XY-02"],artyHeight=207.8,temperature=27.9,humidity=33.2,pressure=986.9))
+# baseDir = Path(__file__).resolve().parent.parent
+# print(LineMultiPoint(baseDir,artyX="11390",artyY="12444",tgtX=["16590","16590","16290"],tgtY=["12444","12644","12644"],explicit=False,system="Sholef",charge=-1,fireAngle="High",windDirection=180,windMagnitude=2,tgtHeight=[73,23,20.2],tgtName=["XY-00","XY-01","XY-02"],artyHeight=207.8,temperature=27.9,humidity=33.2,pressure=986.9))

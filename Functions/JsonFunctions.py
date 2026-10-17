@@ -1,8 +1,8 @@
 from enum import IntEnum
 from pathlib import Path
+#from signalrcore.hub_connection_builder import HubConnectionBuilder
 import json
 import requests
-import ast
 
 class JsonType(IntEnum):
     LOCAL = 0
@@ -33,6 +33,7 @@ class CastJson():
             }
         self.jsonType = JsonType.LOCAL
         self.loaded = {}
+        #self.Common
         """Loaded Json files, to be used with unimportant operations"""
     def SyncAuthToken(self,authToken):
         self.authToken=authToken
@@ -187,12 +188,13 @@ class UksfAccounts():
     def SaveAuthTokenLocal(self,appData_local,authToken: dict | None = None) -> None:
         if authToken is None:
             authToken = self.authToken
-        with open(file=appData_local/"UKSF"/"CAST"/"auth.json",mode="w") as file:
+        with open(file=appData_local/"UKSF"/"auth.json",mode="w") as file:
             json.dump(self.authToken,file,indent=4)
     def RefreshAuthToken(self,appData_local) -> None:
         try:
-            with open(file=appData_local/"UKSF"/"CAST"/"auth.json",mode="r") as file:
+            with open(file=appData_local/"UKSF"/"auth.json",mode="r") as file:
                 self.authToken = json.loads(file.read())
+                print(self.authToken)
             account = requests.get(url="https://api.uk-sf.co.uk/accounts",headers={"Authorization":"Bearer " + self.authToken["token"]}).json()
             self.UIMaster.user = account["displayName"]
         except:
@@ -202,7 +204,7 @@ class UksfAccounts():
                 json.dump(requests.get(url="https://api.uk-sf.co.uk/auth/refresh",headers={"Authorization":"Bearer " + self.authToken["token"]}).json(),file,indent=4)
             return account
     def Logout(self,appData_local):
-        with open(file=appData_local/"UKSF"/"CAST"/"auth.json",mode="w") as file:
+        with open(file=appData_local/"UKSF"/"auth.json",mode="w") as file:
             file.write("")
 
             
